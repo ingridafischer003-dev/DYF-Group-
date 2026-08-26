@@ -1,0 +1,3552 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DYF Group · Control de Deudas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink-950:#12161c; --ink-900:#1a2029; --ink-800:#232b37; --ink-700:#2e3846;
+    --ink-400:#8b93a1; --ink-300:#aab1bd;
+    --paper:#ede8dd; --paper-dim:#d8d2c3;
+    --brass:#c19a5b; --brass-dim:#8a723f;
+    --clay:#c1502e; --clay-dim:#3a2620;
+    --sage:#6b9277; --sage-dim:#20302a;
+    --amber:#d0954a; --amber-dim:#3a2f1c;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--ink-950);color:var(--paper);font-family:'Inter',sans-serif;min-height:100vh;padding:36px 20px 80px;}
+  .wrap{max-width:1180px;margin:0 auto;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.18em;color:var(--brass);text-transform:uppercase;margin:0 0 8px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(26px,4vw,40px);margin:0 0 6px;letter-spacing:-.01em;}
+  .subtitle{color:var(--ink-300);font-size:14px;margin:0 0 28px;}
+  button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
+
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px;}
+  .stat{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:6px;padding:18px 18px 16px;position:relative;overflow:hidden;}
+  .stat::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--brass);}
+  .stat.alert::before{background:var(--clay);}
+  .stat-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-400);margin-bottom:9px;}
+  .stat-value{font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:600;color:var(--paper);line-height:1;}
+  .stat.alert .stat-value{color:var(--clay);}
+  .stat-sub{font-size:11.5px;color:var(--ink-400);margin-top:7px;}
+
+  /* alert banner */
+  .banner{background:var(--clay-dim);border:1px solid var(--clay);border-radius:6px;padding:14px 18px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;}
+  .banner-title{font-family:'Fraunces',serif;font-weight:600;font-size:14.5px;color:#f0c4b4;white-space:nowrap;}
+  .banner-items{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#f0c4b4;display:flex;flex-wrap:wrap;gap:7px;}
+  .banner-items span{background:rgba(0,0,0,.18);padding:3px 8px;border-radius:3px;}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--ink-700);margin-bottom:18px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab-btn{background:transparent;color:var(--ink-400);font-size:13.5px;font-weight:600;padding:10px 16px;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;flex-shrink:0;}
+  .tab-btn.active{color:var(--brass);border-bottom-color:var(--brass);}
+  .tab-btn:hover:not(.active){color:var(--paper);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
+  .toolbar h2{font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin:0;}
+  .btn-primary{background:var(--brass);color:var(--ink-950);font-weight:600;font-size:13px;padding:9px 16px;border-radius:5px;}
+  .btn-primary:hover{background:#d4ac72;}
+  .btn-ghost{background:transparent;color:var(--ink-300);border:1px solid var(--ink-700);font-size:12px;padding:7px 12px;border-radius:5px;}
+  .btn-ghost:hover{border-color:var(--ink-400);color:var(--paper);}
+  .btn-ghost.danger:hover{border-color:var(--clay);color:var(--clay);}
+  .btn-small{font-size:11px;padding:5px 9px;border-radius:4px;}
+
+  /* generic card list (loans) */
+  .cards{display:flex;flex-direction:column;gap:10px;}
+  .loan-card{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:6px;padding:16px 18px;display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:14px;align-items:center;}
+  .loan-card:hover{border-color:var(--ink-400);}
+  .lc-title{font-family:'Fraunces',serif;font-weight:600;font-size:15.5px;}
+  .lc-sub{font-size:11.5px;color:var(--ink-400);margin-top:3px;font-family:'IBM Plex Mono',monospace;}
+  .lc-label{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-400);letter-spacing:.06em;margin-bottom:4px;}
+  .lc-value{font-family:'IBM Plex Mono',monospace;font-size:14px;}
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;padding:3px 7px;border-radius:3px;display:inline-block;text-transform:uppercase;font-weight:600;}
+  .badge-ok{background:var(--sage-dim);color:#a9d3b5;}
+  .badge-warn{background:var(--amber-dim);color:#e8bd82;}
+  .badge-late{background:var(--clay-dim);color:#f0c4b4;border:1px solid var(--clay);}
+
+  /* generic ledger table */
+  .ledger{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:6px;overflow:hidden;overflow-x:auto;}
+  table.ltable{width:100%;border-collapse:collapse;}
+  .ltable th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-400);text-align:left;padding:11px 14px;border-bottom:1px solid var(--ink-700);white-space:nowrap;}
+  .ltable td{padding:11px 14px;border-bottom:1px solid var(--ink-800);font-size:13px;}
+  .ltable tr:last-child td{border-bottom:none;}
+  .ltable tr:hover td{background:var(--ink-800);}
+  .ltable td.mono, .ltable th.mono{font-family:'IBM Plex Mono',monospace;}
+  .ltable tr.total-row td{font-weight:700;background:var(--ink-800);border-top:1px solid var(--brass-dim);}
+
+  .empty{padding:50px 20px;text-align:center;color:var(--ink-400);}
+  .empty b{color:var(--paper);font-family:'Fraunces',serif;font-size:16.5px;display:block;margin-bottom:6px;}
+
+  /* overlays / modals */
+  .overlay{position:fixed;inset:0;background:rgba(10,12,16,.72);display:none;align-items:flex-start;justify-content:center;padding:36px 16px;overflow-y:auto;z-index:50;}
+  .overlay.open{display:flex;}
+  #loan-overlay{z-index:60;}
+  #cuota-overlay{z-index:70;}
+  #pago-overlay{z-index:70;}
+  #income-overlay{z-index:70;}
+  #smart-import-overlay{z-index:70;}
+  #confirm-overlay{z-index:90;}
+  #rotate-overlay{z-index:80;}
+  #alert-overlay{z-index:90;}
+  .modal{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:8px;width:100%;max-width:580px;padding:26px 26px 22px;}
+  .modal.wide{max-width:860px;}
+  .modal h3{font-family:'Fraunces',serif;font-weight:600;font-size:19px;margin:0 0 4px;}
+  .modal .modal-sub{color:var(--ink-400);font-size:12.5px;margin:0 0 20px;}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .field-grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+  .field.full{grid-column:1/-1;}
+  .field label{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-400);}
+  .field input, .field select{background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:8px 10px;border-radius:5px;font-family:'Inter',sans-serif;font-size:13px;}
+  .field input:focus, .field select:focus{outline:none;border-color:var(--brass);}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;flex-wrap:wrap;}
+  .modal-actions.spread{justify-content:space-between;}
+
+  /* loan detail overlay */
+  .detail-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:6px;flex-wrap:wrap;}
+  .detail-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 20px;}
+  .dstat{background:var(--ink-800);border:1px solid var(--ink-700);border-radius:5px;padding:12px 14px;}
+  .dstat-label{font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;color:var(--ink-400);letter-spacing:.06em;margin-bottom:6px;}
+  .dstat-value{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;}
+  .section-title{font-family:'Fraunces',serif;font-weight:600;font-size:14.5px;margin:22px 0 10px;display:flex;align-items:center;justify-content:space-between;}
+  .row-actions{display:flex;gap:5px;justify-content:flex-end;}
+  .icon-btn{background:transparent;border:1px solid var(--ink-700);color:var(--ink-300);width:26px;height:26px;border-radius:4px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;}
+  .icon-btn:hover{border-color:var(--brass);color:var(--brass);}
+  .icon-btn.danger:hover{border-color:var(--clay);color:var(--clay);}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:3px 9px;border-radius:20px;border:1px solid var(--ink-700);color:var(--ink-300);}
+
+  .loading{text-align:center;padding:60px;color:var(--ink-400);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+
+  /* estadísticas / gráficos */
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:26px;}
+  .chart-card{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:6px;padding:20px 22px;margin-bottom:20px;}
+  .chart-title{font-family:'Fraunces',serif;font-weight:600;font-size:15px;margin:0 0 16px;}
+  .bar-row{display:grid;grid-template-columns:130px 1fr 130px;align-items:center;gap:12px;margin-bottom:10px;font-size:12.5px;}
+  .bar-row .bank-name{color:var(--paper);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar-track{background:var(--ink-800);border-radius:4px;height:16px;overflow:hidden;position:relative;}
+  .bar-fill{height:100%;background:var(--brass);border-radius:4px 0 0 4px;transition:width .3s;}
+  .bar-value{font-family:'IBM Plex Mono',monospace;text-align:right;color:var(--ink-300);}
+  .stacked-row{display:grid;grid-template-columns:90px 1fr 170px;align-items:center;gap:12px;margin-bottom:9px;font-size:12px;}
+  .stacked-track{background:var(--ink-800);border-radius:4px;height:16px;overflow:hidden;display:flex;}
+  .stacked-capital{background:var(--brass);height:100%;}
+  .stacked-interes{background:var(--clay);height:100%;}
+  .stacked-gastos{background:var(--amber);height:100%;}
+
+  /* calendario de flujo de caja */
+  .selected-day-label{color:var(--brass);font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;}
+  .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-dow{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-400);text-align:center;padding-bottom:4px;letter-spacing:.05em;}
+  .cal-day{
+    position:relative;
+    background:var(--ink-900);
+    border:1px solid var(--ink-700);
+    border-radius:6px;
+    min-height:64px;
+    padding:6px 7px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    transition:border-color .12s;
+  }
+  .cal-day:hover{border-color:var(--ink-400);}
+  .cal-day.empty{background:transparent;border-color:transparent;cursor:default;}
+  .cal-day.weekend{background:var(--ink-950);}
+  .cal-day.holiday{background:var(--clay-dim);}
+  .cal-day .cal-num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-300);}
+  .cal-day.weekend .cal-num, .cal-day.holiday .cal-num{color:var(--ink-400);}
+  .cal-day .cal-amt{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--brass);font-weight:600;line-height:1.2;word-break:break-word;}
+  .cal-day .cal-holiday-tag{font-size:8.5px;color:#f0c4b4;text-transform:uppercase;letter-spacing:.03em;}
+  .cal-day.has-obligations{border-color:var(--brass-dim);}
+  .cal-day.is-today .cal-num{text-decoration:underline;text-underline-offset:3px;}
+  .cal-day.is-selected{
+    background:var(--brass);
+    border-color:var(--brass);
+  }
+  .cal-day.is-selected .cal-num{color:var(--ink-950);font-weight:700;}
+  .cal-day.is-selected .cal-amt{color:var(--ink-950);}
+  .cal-day.is-selected .cal-holiday-tag{color:var(--clay-dim);}
+  .legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink-400);margin-bottom:14px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
+  @media (max-width:900px){
+    .loan-card{grid-template-columns:1fr 1fr;}
+    .loan-card .row-actions{grid-column:1/-1;justify-content:flex-start;}
+    .field-grid, .field-grid.cols-3{grid-template-columns:1fr;}
+  }
+  @media (max-width:600px){
+    body{padding:20px 12px 60px;}
+    h1{font-size:22px;}
+    .subtitle{font-size:12.5px;}
+    .modal{padding:20px 16px 18px;max-width:100%;}
+    .modal.wide{max-width:100%;}
+    .stats{grid-template-columns:1fr 1fr;}
+    .stat{padding:14px 14px 12px;}
+    .stat-value{font-size:18px;}
+    .calendar-grid{gap:3px;}
+    .cal-day{min-height:44px;padding:4px 3px;border-radius:4px;}
+    .cal-day .cal-num{font-size:10.5px;}
+    .cal-day .cal-amt{font-size:8px;}
+    .cal-holiday-tag{display:none;}
+    .cal-dow{font-size:8.5px;padding-bottom:2px;}
+    .toolbar{flex-direction:column;align-items:flex-start;gap:10px;}
+    .toolbar > div{width:100%;}
+    .detail-header{flex-direction:column;}
+    .ltable th, .ltable td{padding:9px 10px;font-size:12px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">DYF Group — Finanzas</p>
+  <h1>Control de deudas y préstamos</h1>
+  <p class="subtitle">Cronograma de cuotas por préstamo, totales por mes y por banco, y costo financiero real de la empresa.</p>
+  <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
+    <button class="btn-ghost btn-small" onclick="exportBackup()">⬇ Exportar copia de seguridad</button>
+    <button class="btn-ghost btn-small" onclick="triggerImport()">⬆ Importar copia de seguridad</button>
+    <input type="file" id="import-input" accept="application/json" style="display:none;" onchange="importBackup(event)">
+    <span style="width:1px;background:var(--ink-700);"></span>
+    <button class="btn-ghost btn-small" onclick="downloadTemplate()">📄 Descargar plantilla Excel</button>
+    <button class="btn-primary btn-small" onclick="triggerExcelImport()">📥 Importar desde Excel (plantilla)</button>
+    <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
+    <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA u otro Excel)</button>
+    <input type="file" id="smart-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleSmartExcelSelect(event)">
+    <span style="width:1px;background:var(--ink-700);"></span>
+    <button class="btn-ghost btn-small" onclick="openSyncModal()">🔄 <span id="sync-status-label">Sincronización</span></button>
+  </div>
+
+  <div id="backup-reminder-container"></div>
+
+  <div id="loading" class="loading">Cargando información guardada…</div>
+
+  <div id="app" style="display:none;">
+    <div class="stats" id="stats"></div>
+    <div id="banner-container"></div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="priority" onclick="switchTab('priority')">Prioridad</button>
+      <button class="tab-btn" data-tab="flujo" onclick="switchTab('flujo')">Flujo de caja</button>
+      <button class="tab-btn" data-tab="loans" onclick="switchTab('loans')">Préstamos</button>
+      <button class="tab-btn" data-tab="pagos" onclick="switchTab('pagos')">Cheques y pagos</button>
+      <button class="tab-btn" data-tab="bank" onclick="switchTab('bank')">Por banco</button>
+      <button class="tab-btn" data-tab="month" onclick="switchTab('month')">Por mes</button>
+      <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')">Estadísticas</button>
+    </div>
+
+    <div class="panel active" id="panel-priority">
+      <div class="toolbar">
+        <h2>Qué vence y hay que pagar</h2>
+        <select id="priority-bank-filter" onchange="renderPriorityTab()" style="background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:7px 10px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12.5px;">
+          <option value="">Todas las entidades</option>
+        </select>
+      </div>
+      <div class="ledger"><table class="ltable" id="priority-table"></table></div>
+    </div>
+
+    <div class="panel" id="panel-flujo">
+      <div class="toolbar">
+        <h2>Flujo de caja diario</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-ghost btn-small" onclick="changeCalMonth(-1)">‹ Mes anterior</button>
+          <span class="pill" id="cal-month-label" style="min-width:150px;text-align:center;"></span>
+          <button class="btn-ghost btn-small" onclick="changeCalMonth(1)">Mes siguiente ›</button>
+          <button class="btn-ghost btn-small" onclick="goToTodayCal()">Hoy</button>
+        </div>
+      </div>
+      <div class="stat-grid" id="flujo-summary" style="margin-bottom:20px;"></div>
+
+      <div class="section-title">Cheques no pagados (vencidos)</div>
+      <p class="modal-sub" style="margin-top:-4px;">Cheques a proveedores y a empresas del grupo cuya fecha de pago ya pasó y siguen sin marcarse como pagados — por ejemplo, un cheque que no entró en el día y sigue pendiente. Se actualiza solo cada día hasta que lo marqués como pagado.</p>
+      <div class="ledger" style="margin-bottom:24px;"><table class="ltable" id="flujo-vencidos-table"></table></div>
+
+      <div class="calendar-grid" id="flujo-calendar"></div>
+      <div class="section-title" style="margin-top:22px;">Obligaciones del día seleccionado — <span id="flujo-day-label" class="selected-day-label"></span></div>
+      <div class="ledger"><table class="ltable" id="flujo-day-table"></table></div>
+      <p class="modal-sub" style="margin-top:10px;">Los pagos que caen sábado, domingo o feriado paraguayo se muestran en el día hábil siguiente, que es cuando realmente se procesan.</p>
+    </div>
+
+    <div class="panel" id="panel-loans">
+      <div class="toolbar">
+        <h2>Préstamos registrados</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span class="pill" id="proforma-status" style="display:none;">Leyendo documento…</span>
+          <button class="btn-ghost btn-small" onclick="openResumenModal()">📊 Descargar resumen</button>
+          <button class="btn-ghost btn-small" onclick="triggerProformaUpload()">📄 Cargar proforma (imagen o PDF)</button>
+          <input type="file" id="proforma-input" accept="image/*,.pdf" style="display:none;" onchange="handleProformaUpload(event)">
+          <button class="btn-primary" onclick="pendingProformaCuotas=null;openLoanModal()">+ Nuevo préstamo</button>
+        </div>
+      </div>
+      <div class="cards" id="loan-cards"></div>
+    </div>
+
+    <div class="panel" id="panel-pagos">
+      <div class="toolbar">
+        <h2>Cheques a proveedores y otros pagos</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-ghost btn-small" onclick="removeDuplicatePagos()">Eliminar duplicados</button>
+          <button class="btn-ghost btn-small danger" onclick="clearAllPagos()">Vaciar todos</button>
+          <button class="btn-primary" onclick="openPagoModal()">+ Nuevo pago</button>
+        </div>
+      </div>
+      <div class="cards" id="pago-cards"></div>
+    </div>
+
+    <div class="panel" id="panel-bank">
+      <div class="toolbar"><h2>Total a pagar por banco</h2></div>
+      <div class="ledger"><table class="ltable" id="bank-table"></table></div>
+    </div>
+
+    <div class="panel" id="panel-month">
+      <div class="toolbar">
+        <h2>Total a pagar por mes</h2>
+        <span class="pill">Hacé clic en el ingreso de un mes para cargarlo</span>
+      </div>
+      <div class="ledger"><table class="ltable" id="month-table"></table></div>
+    </div>
+
+    <div class="panel" id="panel-stats">
+      <div class="toolbar"><h2>Estadísticas y costo financiero</h2></div>
+      <div id="stats-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: importación inteligente de cheques (MIDA u otro Excel) -->
+<div class="overlay" id="smart-import-overlay">
+  <div class="modal wide">
+    <h3>Importar cheques desde Excel</h3>
+    <p class="modal-sub" id="smart-import-subtitle">Detectamos las columnas del archivo. Revisá que coincidan y confirmá qué tipo de pago es.</p>
+    <div class="field-grid">
+      <div class="field">
+        <label>¿Qué tipo de pago es este archivo?</label>
+        <select id="si-tipo" onchange="refreshCurrentPreview()">
+          <option value="Cheque">Cheques a proveedores</option>
+          <option value="ChequeGrupo">Cheques a empresas del grupo</option>
+          <option value="Otro">Otros pagos</option>
+        </select>
+      </div>
+      <div class="field"><label>Hoja del Excel</label><select id="si-sheet" onchange="onSmartSheetChange()"></select></div>
+    </div>
+    <div id="si-mida-note" style="display:none;background:var(--sage-dim);border:1px solid var(--sage);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:#a9d3b5;">
+      ✓ Se detectó un reporte de cheques agrupado por cuenta bancaria (formato tipo MIDA). El banco, proveedor, N° de cheque, concepto, fecha de pago y monto se extrajeron automáticamente.
+    </div>
+    <div class="field-grid" id="si-generic-fields">
+      <div class="field"><label>Columna: Banco (opcional)</label><select id="si-col-banco" onchange="refreshCurrentPreview()"></select></div>
+      <div class="field"><label>Columna: Proveedor / beneficiario</label><select id="si-col-entidad" onchange="refreshCurrentPreview()"></select></div>
+      <div class="field"><label>Columna: Fecha de pago</label><select id="si-col-fecha" onchange="refreshCurrentPreview()"></select></div>
+      <div class="field"><label>Columna: Monto</label><select id="si-col-monto" onchange="refreshCurrentPreview()"></select></div>
+    </div>
+    <div class="section-title" style="margin-top:6px;">Vista previa (primeras filas)</div>
+    <div class="ledger" style="margin-bottom:16px;"><table class="ltable" id="smart-preview-table"></table></div>
+    <details style="margin-bottom:14px;">
+      <summary style="cursor:pointer;color:var(--ink-400);font-size:11.5px;">Ver datos crudos leídos del archivo (diagnóstico)</summary>
+      <pre id="smart-debug" style="white-space:pre-wrap;font-size:11px;color:var(--ink-300);background:var(--ink-800);border-radius:5px;padding:10px;margin-top:8px;max-height:220px;overflow:auto;"></pre>
+    </details>
+    <div class="modal-actions spread">
+      <span class="pill" id="smart-import-count">0 filas detectadas</span>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn-ghost" onclick="closeSmartImport()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="confirmSmartImport()">Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: configurar sincronización en tiempo real -->
+<div class="overlay" id="sync-overlay">
+  <div class="modal">
+    <h3>Sincronización en tiempo real</h3>
+    <p class="modal-sub">Conectá esta computadora a una base de datos compartida (Supabase) para que todos los gerentes vean los mismos datos en vivo. Se configura una sola vez por dispositivo.</p>
+    <div id="sync-current-status" style="margin-bottom:14px;"></div>
+    <div class="field-grid">
+      <div class="field full">
+        <label>Project URL de Supabase</label>
+        <input type="text" id="sync-url" placeholder="https://xxxxxxxx.supabase.co">
+      </div>
+      <div class="field full">
+        <label>Anon public key</label>
+        <input type="text" id="sync-key" placeholder="eyJhbGciOiJI...">
+      </div>
+      <div class="field full">
+        <label>ID de espacio de trabajo (igual en todas las computadoras que deban compartir datos)</label>
+        <input type="text" id="sync-workspace" placeholder="ciro-group">
+      </div>
+    </div>
+    <div class="modal-actions spread">
+      <button type="button" class="btn-ghost danger" onclick="desconectarSync()">Desconectar</button>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn-ghost" onclick="closeSyncModal()">Cerrar</button>
+        <button type="button" class="btn-primary" onclick="conectarSync()">Conectar y sincronizar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: registrar pago parcial de un cheque -->
+<div class="overlay" id="parcial-overlay">
+  <div class="modal" style="max-width:420px;">
+    <h3>Registrar pago parcial</h3>
+    <p class="modal-sub" id="parcial-modal-sub"></p>
+    <div class="field full">
+      <label>Monto pagado ahora (Gs.)</label>
+      <input type="number" id="parcial-monto" min="0" step="1">
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeParcialModal()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmarPagoParcial()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: nuevo/editar pago o cheque -->
+<div class="overlay" id="pago-overlay">
+  <div class="modal">
+    <h3 id="pago-modal-title">Nuevo pago</h3>
+    <p class="modal-sub">Cheques a proveedores u otros pagos: alquiler, sueldos, servicios, impuestos, etc.</p>
+    <form id="pago-form" onsubmit="return savePago(event)" novalidate>
+      <input type="hidden" id="p-id">
+      <div class="field-grid">
+        <div class="field">
+          <label>Tipo</label>
+          <select id="p-tipo">
+            <option value="Cheque">Cheque a proveedor</option>
+            <option value="ChequeGrupo">Cheque a empresa del grupo</option>
+            <option value="Otro">Otro pago</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Proveedor / beneficiario</label>
+          <input type="text" id="p-entidad" placeholder="Ej: Proveedor XYZ" required>
+        </div>
+        <div class="field full">
+          <label>Concepto</label>
+          <input type="text" id="p-concepto" placeholder="Ej: Cheque N° 001-2345, factura, alquiler oficina...">
+        </div>
+        <div class="field">
+          <label>Monto (Gs.)</label>
+          <input type="number" id="p-monto" min="0" step="1" required>
+        </div>
+        <div class="field">
+          <label>Fecha de pago</label>
+          <input type="date" id="p-fecha" required>
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <select id="p-estado">
+            <option value="Pendiente">Pendiente</option>
+            <option value="Pagada">Pagado</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" onclick="closePagoModal()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="savePago(event)">Guardar pago</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: confirmación propia (reemplaza confirm() nativo, bloqueado en algunas vistas previas) -->
+<div class="overlay" id="confirm-overlay">
+  <div class="modal" style="max-width:420px;">
+    <h3 id="confirm-title">Confirmar acción</h3>
+    <p class="modal-sub" id="confirm-message" style="white-space:pre-line;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeConfirm(false)">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="closeConfirm(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: aviso propio (reemplaza alert() nativo) -->
+<div class="overlay" id="alert-overlay">
+  <div class="modal" style="max-width:420px;">
+    <h3 id="alert-title">Aviso</h3>
+    <p class="modal-sub" id="alert-message" style="white-space:pre-line;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-primary" onclick="closeAppAlert()">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: cargar ingreso mensual -->
+<div class="overlay" id="income-overlay">
+  <div class="modal">
+    <h3>Ingreso del mes</h3>
+    <p class="modal-sub" id="income-modal-sub"></p>
+    <form id="income-form" onsubmit="return saveIncome(event)" novalidate>
+      <input type="hidden" id="inc-month">
+      <div class="field full">
+        <label>Ingreso estimado / real (Gs.)</label>
+        <input type="number" id="inc-monto" min="0" step="1" required>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" onclick="closeIncomeModal()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="saveIncome(event)">Guardar ingreso</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: descargar resumen de préstamos -->
+<div class="overlay" id="resumen-overlay">
+  <div class="modal">
+    <h3>Descargar resumen de préstamos</h3>
+    <p class="modal-sub">Elegí el banco y el formato del archivo.</p>
+    <div class="field-grid">
+      <div class="field full">
+        <label>Banco</label>
+        <select id="resumen-banco"></select>
+      </div>
+      <div class="field full">
+        <label>Formato</label>
+        <select id="resumen-formato">
+          <option value="excel">Excel (.xlsx)</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeResumenModal()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="descargarResumen()">Descargar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: ajustar orientación antes de leer el documento -->
+<div class="overlay" id="rotate-overlay">
+  <div class="modal">
+    <h3>Ajustar orientación del documento</h3>
+    <p class="modal-sub">Si el documento aparece girado o de costado, rotalo antes de continuar para que se pueda leer bien.</p>
+    <div style="display:flex;justify-content:center;margin-bottom:16px;overflow:auto;max-height:360px;background:var(--ink-950);border-radius:6px;padding:10px;">
+      <canvas id="rotate-preview-canvas" style="max-width:100%;height:auto;"></canvas>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px;">
+      <button type="button" class="btn-ghost btn-small" onclick="rotateProformaPreview(-90)">↺ Girar izquierda</button>
+      <button type="button" class="btn-ghost btn-small" onclick="rotateProformaPreview(90)">↻ Girar derecha</button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeRotateModal()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmRotationAndProcess()">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: nuevo/editar préstamo -->
+<div class="overlay" id="loan-overlay">
+  <div class="modal">
+    <h3 id="loan-modal-title">Nuevo préstamo</h3>
+    <p class="modal-sub">Datos generales del préstamo. El cronograma de cuotas se carga después.</p>
+    <form id="loan-form" onsubmit="return saveLoan(event)" novalidate>
+      <input type="hidden" id="l-id">
+      <div class="field-grid">
+        <div class="field full">
+          <label>Entidad / banco</label>
+          <input type="text" id="l-banco" placeholder="Ej: Continental" required>
+        </div>
+        <div class="field">
+          <label>N° de operación / préstamo</label>
+          <input type="text" id="l-numop" placeholder="Ej: 3806-046/03">
+        </div>
+        <div class="field">
+          <label>Sistema de amortización</label>
+          <select id="l-tipo" onchange="toggleGraciaField()">
+            <option value="Frances">Francés (cuota fija: capital + interés todos los meses)</option>
+            <option value="Aleman">Alemán (capital fijo, interés decreciente)</option>
+            <option value="SoloInteres">Solo interés (capital 100% al vencimiento)</option>
+            <option value="BulletPeriodico">Bullet periódico (capital cada N meses, interés mensual)</option>
+            <option value="Gracia">Con gracia de capital (solo interés los primeros meses)</option>
+            <option value="Variable">Variable / manual (cargar cada cuota a mano)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Monto total del préstamo (Gs.)</label>
+          <input type="number" id="l-monto" min="0" step="1" required>
+        </div>
+        <div class="field">
+          <label>Tasa de interés anual (%)</label>
+          <input type="number" id="l-tasa" min="0" step="0.01" required>
+        </div>
+        <div class="field">
+          <label>Fecha de inicio</label>
+          <input type="date" id="l-inicio" required>
+        </div>
+        <div class="field">
+          <label>Plazo (N° de cuotas, opcional)</label>
+          <input type="number" id="l-plazo" min="1" step="1" placeholder="Ej: 12">
+        </div>
+        <div class="field" id="l-gracia-field" style="display:none;">
+          <label>Meses de gracia (solo interés)</label>
+          <input type="number" id="l-gracia" min="1" step="1" placeholder="Ej: 3">
+        </div>
+        <div class="field" id="l-frecap-field" style="display:none;">
+          <label>Cada cuántos meses se paga capital</label>
+          <input type="number" id="l-frecap" min="1" step="1" placeholder="Ej: 6" value="6">
+        </div>
+        <div class="field full">
+          <label>Notas (opcional)</label>
+          <input type="text" id="l-notas" placeholder="Garantía, contacto, condiciones...">
+        </div>
+      </div>
+      <details id="l-proforma-debug" style="display:none;margin-bottom:14px;">
+        <summary style="cursor:pointer;color:var(--ink-400);font-size:11.5px;">Ver texto crudo leído del documento (diagnóstico)</summary>
+        <pre id="l-proforma-debug-text" style="white-space:pre-wrap;font-size:11px;color:var(--ink-300);background:var(--ink-800);border-radius:5px;padding:10px;margin-top:8px;max-height:200px;overflow:auto;"></pre>
+      </details>
+      <div class="modal-actions spread">
+        <button type="button" class="btn-ghost" id="l-autogen-btn" onclick="autogenFromModal()">Generar cronograma automático</button>
+        <div style="display:flex;gap:10px;">
+          <button type="button" class="btn-ghost" onclick="closeLoanModal()">Cancelar</button>
+          <button type="button" class="btn-primary" onclick="saveLoan(event)">Guardar préstamo</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: agregar/editar cuota -->
+<div class="overlay" id="cuota-overlay">
+  <div class="modal">
+    <h3 id="cuota-modal-title">Nueva cuota</h3>
+    <p class="modal-sub">Cargá capital e interés por separado, tal como figura en el banco.</p>
+    <form id="cuota-form" onsubmit="return saveCuota(event)" novalidate>
+      <input type="hidden" id="c-loan-id">
+      <input type="hidden" id="c-id">
+      <div class="field-grid cols-3">
+        <div class="field">
+          <label>N° de cuota</label>
+          <input type="number" id="c-numero" min="1" step="1" required>
+        </div>
+        <div class="field">
+          <label>Fecha de vencimiento</label>
+          <input type="date" id="c-fecha" required>
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <select id="c-estado">
+            <option value="Pendiente">Pendiente</option>
+            <option value="Pagada">Pagada</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Capital (Gs.)</label>
+          <input type="number" id="c-capital" min="0" step="1" required>
+        </div>
+        <div class="field">
+          <label>Interés (Gs.)</label>
+          <input type="number" id="c-interes" min="0" step="1" required>
+        </div>
+        <div class="field">
+          <label>Gastos admin./bancarios (Gs.)</label>
+          <input type="number" id="c-gastos" min="0" step="1" value="0">
+        </div>
+        <div class="field">
+          <label>Total cuota (Gs.)</label>
+          <input type="text" id="c-total" disabled>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" onclick="closeCuotaModal()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="saveCuota(event)">Guardar cuota</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Overlay: detalle / cronograma del préstamo -->
+<div class="overlay" id="detail-overlay">
+  <div class="modal wide">
+    <div class="detail-header">
+      <div>
+        <h3 id="detail-title">Préstamo</h3>
+        <p class="modal-sub" id="detail-sub" style="margin:0;"></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-ghost btn-small" onclick="editLoanFromDetail()">Editar préstamo</button>
+        <button class="btn-ghost btn-small danger" onclick="deleteLoanFromDetail()">Eliminar préstamo</button>
+        <button class="btn-ghost btn-small" onclick="closeDetail()">Cerrar</button>
+      </div>
+    </div>
+
+    <div class="detail-stats" id="detail-stats"></div>
+
+    <div class="section-title">
+      Cuotas pendientes
+      <button class="btn-primary btn-small" onclick="openCuotaModal()">+ Agregar cuota</button>
+    </div>
+    <div class="ledger" style="margin-bottom:8px;"><table class="ltable" id="cuotas-pendientes-table"></table></div>
+
+    <div class="section-title">Cuotas pagadas</div>
+    <div class="ledger"><table class="ltable" id="cuotas-pagadas-table"></table></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'dyf-loans-v2';
+const INCOME_KEY = 'dyf-incomes-v1';
+const PAGOS_KEY = 'dyf-pagos-v1';
+const BACKUP_DATE_KEY = 'dyf-lastbackup-v1';
+const SYNC_CONFIG_KEY = 'dyf-sync-config-v1';
+let supabaseClient = null;
+let supabaseConfig = { url:'', key:'', workspace:'' };
+let syncEnabled = false;
+let applyingRemoteUpdate = false;
+let loans = [];
+let incomes = {};
+let pagos = [];
+let activeTab = 'priority';
+let activeLoanId = null;
+let editingCuotaId = null;
+let pendingProformaCuotas = null;
+
+/* ---------- utilidades ---------- */
+let uidCounter = 0;
+function uid(prefix){ uidCounter++; return prefix + Date.now() + '_' + uidCounter + '_' + Math.floor(Math.random()*100000); }
+function money(n){ return 'Gs. ' + Math.round(n||0).toLocaleString('es-PY'); }
+function todayISO(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+function daysUntil(dateStr){
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.round((target - todayISO()) / 86400000);
+}
+function formatDate(dateStr){
+  if(!dateStr) return '—';
+  const parts = dateStr.split('-');
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+function monthKey(dateStr){ return dateStr ? dateStr.slice(0,7) : ''; }
+function monthLabel(key){
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const parts = key.split('-');
+  return `${MESES[parseInt(parts[1],10)-1]} ${parts[0]}`;
+}
+function escapeHtml(str){
+  if(!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+/* ---------- diálogos propios (algunos entornos, como la vista previa de artefactos,
+   bloquean confirm()/alert() nativos del navegador) ---------- */
+let _confirmCallback = null;
+function appConfirm(message, onYes){
+  _confirmCallback = onYes;
+  document.getElementById('confirm-message').textContent = message;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function closeConfirm(result){
+  document.getElementById('confirm-overlay').classList.remove('open');
+  const cb = _confirmCallback;
+  _confirmCallback = null;
+  if(result && cb) cb();
+}
+function appAlert(message){
+  document.getElementById('alert-message').textContent = message;
+  document.getElementById('alert-overlay').classList.add('open');
+}
+function closeAppAlert(){
+  document.getElementById('alert-overlay').classList.remove('open');
+}
+function addMonths(dateStr, n){
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0,10);
+}
+function pagoTipoLabel(tipo){
+  if(tipo==='Cheque') return 'Cheque a proveedor';
+  if(tipo==='ChequeGrupo') return 'Cheque a empresa del grupo';
+  return 'Otro pago';
+}
+
+/* ---------- persistencia (localStorage del navegador donde se abre el archivo) ---------- */
+function loadLoans(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    loans = raw ? JSON.parse(raw) : [];
+  }catch(e){ loans = []; }
+  try{
+    const rawInc = localStorage.getItem(INCOME_KEY);
+    incomes = rawInc ? JSON.parse(rawInc) : {};
+  }catch(e){ incomes = {}; }
+  try{
+    const rawPag = localStorage.getItem(PAGOS_KEY);
+    pagos = rawPag ? JSON.parse(rawPag) : [];
+  }catch(e){ pagos = []; }
+  if(repairDuplicateCuotaIds()) persist();
+  if(repairDuplicatePagoIds()) persistPagos();
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  renderAll();
+  updateSyncStatusLabel();
+  initSyncFromSavedConfig().then(function(){
+    updateSyncStatusLabel();
+    renderAll();
+  });
+}
+function persistIncomes(){
+  try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }
+  catch(e){ console.error('No se pudo guardar ingresos', e); }
+  pushToSupabase();
+}
+function persistPagos(){
+  try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }
+  catch(e){ console.error('No se pudo guardar pagos', e); }
+  pushToSupabase();
+}
+/* ---------- sincronización en tiempo real (Supabase) ---------- */
+function loadSyncConfig(){
+  try{
+    const raw = localStorage.getItem(SYNC_CONFIG_KEY);
+    if(raw) supabaseConfig = JSON.parse(raw);
+  }catch(e){ supabaseConfig = {url:'', key:'', workspace:''}; }
+}
+function saveSyncConfigLocal(){
+  try{ localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(supabaseConfig)); }catch(e){}
+}
+function updateSyncStatusLabel(){
+  const label = document.getElementById('sync-status-label');
+  if(!label) return;
+  label.textContent = syncEnabled ? 'Sincronizado ('+supabaseConfig.workspace+')' : 'Sincronización';
+}
+async function initSyncFromSavedConfig(){
+  loadSyncConfig();
+  if(!supabaseConfig.url || !supabaseConfig.key || !supabaseConfig.workspace) return;
+  try{
+    supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.key);
+    syncEnabled = true;
+    updateSyncStatusLabel();
+    const remote = await pullFromSupabase();
+    if(remote){
+      applyingRemoteUpdate = true;
+      loans = remote.loans || [];
+      incomes = remote.incomes || {};
+      pagos = remote.pagos || [];
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
+      try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
+      try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }catch(e){}
+      applyingRemoteUpdate = false;
+    }
+    subscribeRealtime();
+  }catch(e){
+    console.error('No se pudo conectar la sincronización', e);
+    syncEnabled = false;
+    updateSyncStatusLabel();
+  }
+}
+async function pullFromSupabase(){
+  if(!syncEnabled) return null;
+  try{
+    const res = await supabaseClient.from('app_state').select('data').eq('id', supabaseConfig.workspace).maybeSingle();
+    if(res.error) throw res.error;
+    return res.data ? res.data.data : null;
+  }catch(e){
+    console.error('Error al leer de Supabase', e);
+    return null;
+  }
+}
+let pushDebounceTimer = null;
+function pushToSupabase(){
+  if(!syncEnabled || applyingRemoteUpdate) return;
+  clearTimeout(pushDebounceTimer);
+  pushDebounceTimer = setTimeout(async function(){
+    try{
+      const payload = { loans: loans, incomes: incomes, pagos: pagos };
+      const res = await supabaseClient.from('app_state').upsert({ id: supabaseConfig.workspace, data: payload, updated_at: new Date().toISOString() });
+      if(res.error) throw res.error;
+    }catch(e){
+      console.error('No se pudo sincronizar con Supabase', e);
+    }
+  }, 600);
+}
+function subscribeRealtime(){
+  if(!syncEnabled) return;
+  supabaseClient.channel('app_state_'+supabaseConfig.workspace)
+    .on('postgres_changes', { event:'*', schema:'public', table:'app_state', filter:'id=eq.'+supabaseConfig.workspace }, function(payload){
+      if(payload.new && payload.new.data){
+        applyingRemoteUpdate = true;
+        loans = payload.new.data.loans || [];
+        incomes = payload.new.data.incomes || {};
+        pagos = payload.new.data.pagos || [];
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
+        try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
+        try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }catch(e){}
+        renderAll();
+        applyingRemoteUpdate = false;
+      }
+    })
+    .subscribe();
+}
+function openSyncModal(){
+  document.getElementById('sync-url').value = supabaseConfig.url || '';
+  document.getElementById('sync-key').value = supabaseConfig.key || '';
+  document.getElementById('sync-workspace').value = supabaseConfig.workspace || '';
+  document.getElementById('sync-current-status').innerHTML = syncEnabled
+    ? '<span class="badge badge-ok">Conectado</span> a "'+escapeHtml(supabaseConfig.workspace)+'" — los cambios se comparten en vivo con quien use el mismo ID de espacio de trabajo.'
+    : '<span class="pill">No conectado</span> — esta computadora solo guarda localmente.';
+  document.getElementById('sync-overlay').classList.add('open');
+}
+function closeSyncModal(){
+  document.getElementById('sync-overlay').classList.remove('open');
+}
+async function conectarSync(){
+  const url = document.getElementById('sync-url').value.trim();
+  const key = document.getElementById('sync-key').value.trim();
+  const workspace = document.getElementById('sync-workspace').value.trim();
+  if(!url || !key || !workspace){
+    appAlert('Completá la URL, la clave y el ID de espacio de trabajo.');
+    return;
+  }
+  supabaseConfig = { url:url, key:key, workspace:workspace };
+  saveSyncConfigLocal();
+  closeSyncModal();
+  setProformaStatus('Conectando con la base compartida…');
+  await initSyncFromSavedConfig();
+  setProformaStatus('');
+  if(syncEnabled){
+    // si el espacio de trabajo estaba vacío del lado del servidor, sube lo que ya había localmente
+    const remote = await pullFromSupabase();
+    if(!remote){
+      pushToSupabase();
+    }
+    renderAll();
+    appAlert('Sincronización conectada. A partir de ahora, los cambios se comparten en vivo con cualquier computadora configurada con el mismo ID de espacio de trabajo ("'+workspace+'").');
+  }else{
+    appAlert('No se pudo conectar. Revisá que la URL y la clave sean correctas (Project Settings → API en Supabase).');
+  }
+}
+function desconectarSync(){
+  appConfirm('¿Desconectar la sincronización en esta computadora? Los datos van a seguir guardándose solo localmente, y no vas a ver actualizaciones de otras computadoras hasta que te conectes de nuevo.', function(){
+    syncEnabled = false;
+    supabaseClient = null;
+    supabaseConfig = {url:'', key:'', workspace:''};
+    saveSyncConfigLocal();
+    updateSyncStatusLabel();
+    closeSyncModal();
+  });
+}
+function repairDuplicatePagoIds(){
+  let fixed = false;
+  const seen = {};
+  pagos.forEach(function(p){
+    if(seen[p.id]){
+      p.id = uid('p');
+      fixed = true;
+    }
+    seen[p.id] = true;
+  });
+  return fixed;
+}
+function repairDuplicateCuotaIds(){
+  let fixed = false;
+  loans.forEach(function(l){
+    const seen = {};
+    l.cuotas.forEach(function(c){
+      if(seen[c.id]){
+        c.id = uid('c');
+        fixed = true;
+      }
+      seen[c.id] = true;
+    });
+  });
+  return fixed;
+}
+function persist(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(loans));
+  }catch(e){
+    console.error('No se pudo guardar', e);
+    appAlert('No se pudo guardar en este navegador. Usá "Exportar copia de seguridad" para no perder los datos cargados.');
+  }
+  pushToSupabase();
+}
+function exportBackup(){
+  const payload = {loans:loans, incomes:incomes, pagos:pagos};
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dyf-deudas-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  try{ localStorage.setItem(BACKUP_DATE_KEY, todayISOStr()); }catch(e){}
+  renderBackupReminder();
+}
+function triggerImport(){
+  document.getElementById('import-input').click();
+}
+function importBackup(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const data = JSON.parse(ev.target.result);
+      let newLoans, newIncomes, newPagos;
+      if(Array.isArray(data)){
+        // formato viejo: solo el array de préstamos
+        newLoans = data; newIncomes = {}; newPagos = [];
+      }else if(data && Array.isArray(data.loans)){
+        newLoans = data.loans; newIncomes = data.incomes||{}; newPagos = data.pagos||[];
+      }else{
+        throw new Error('Formato inválido');
+      }
+      function applyImport(){
+        loans = newLoans; incomes = newIncomes; pagos = newPagos;
+        persist(); persistIncomes(); persistPagos();
+        renderAll();
+        appAlert('Copia de seguridad importada correctamente.');
+      }
+      if(loans.length>0 || pagos.length>0){
+        appConfirm('Esto va a reemplazar los datos cargados actualmente (préstamos, ingresos y pagos) por los del archivo importado. ¿Continuar?', applyImport);
+      }else{
+        applyImport();
+      }
+    }catch(err){
+      appAlert('El archivo no tiene un formato válido de copia de seguridad de este sistema.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+/* ---------- importar / plantilla Excel ---------- */
+function toISODate(val, monthFirst){
+  if(val===undefined || val===null || val==='') return '';
+  if(val instanceof Date) return val.toISOString().slice(0,10);
+  if(typeof val === 'number'){
+    const ms = Math.round((val - 25569) * 86400 * 1000);
+    return new Date(ms).toISOString().slice(0,10);
+  }
+  const s = String(val).trim();
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)){
+    const parts = s.split('-');
+    return parts[0]+'-'+parts[1].padStart(2,'0')+'-'+parts[2].padStart(2,'0');
+  }
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){
+    let year = m[3]; if(year.length===2) year = '20'+year;
+    let a = parseInt(m[1],10), b = parseInt(m[2],10);
+    let day, month;
+    if(monthFirst){ month=a; day=b; } else { day=a; month=b; }
+    // si alguno quedó fuera de rango como mes (>12), es porque en realidad es el día: se corrige el orden
+    if(month>12 && day<=12){ const t=month; month=day; day=t; }
+    if(month<1 || month>12 || day<1 || day>31) return '';
+    return year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+  }
+  return '';
+}
+function downloadTemplate(){
+  if(typeof XLSX==='undefined'){
+    appAlert('No se pudo cargar el generador de Excel (revisá tu conexión a internet e intentá de nuevo).');
+    return;
+  }
+  const wsPrestamos = XLSX.utils.json_to_sheet([
+    {Banco:'Continental', NumeroOperacion:'3806-046/03', Sistema:'Frances', MontoOriginal:120000000, TasaAnual:14, FechaInicio:'2026-01-15', PlazoMeses:24, MesesGracia:'', FrecuenciaCapital:'', Notas:'Ejemplo - se puede borrar'}
+  ]);
+  const wsCuotas = XLSX.utils.json_to_sheet([
+    {NumeroOperacion:'3806-046/03', Numero:1, Fecha:'2026-02-15', Capital:4500000, Interes:1400000, Estado:'Pendiente'}
+  ]);
+  const wsPagos = XLSX.utils.json_to_sheet([
+    {Tipo:'Cheque', Entidad:'Proveedor XYZ', Concepto:'Cheque N° 001-2345', Monto:3500000, Fecha:'2026-08-10', Estado:'Pendiente'}
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsPrestamos, 'Prestamos');
+  XLSX.utils.book_append_sheet(wb, wsCuotas, 'Cuotas');
+  XLSX.utils.book_append_sheet(wb, wsPagos, 'Pagos');
+  XLSX.writeFile(wb, 'plantilla-importacion-deudas.xlsx');
+}
+function triggerExcelImport(){
+  if(typeof XLSX==='undefined'){
+    appAlert('No se pudo cargar el lector de Excel (revisá tu conexión a internet e intentá de nuevo).');
+    return;
+  }
+  document.getElementById('excel-import-input').click();
+}
+function handleExcelImport(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      let addedLoans=0, addedCuotasManual=0, addedCuotasAuto=0, addedPagos=0;
+
+      // 1) leer cuotas manuales primero, agrupadas por N° de operación
+      const cuotasMap = {};
+      if(wb.SheetNames.indexOf('Cuotas')!==-1){
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets['Cuotas'], {defval:''});
+        rows.forEach(function(row){
+          const numOp = String(row.NumeroOperacion||'').trim();
+          const fecha = toISODate(row.Fecha);
+          if(!numOp || !fecha) return;
+          if(!cuotasMap[numOp]) cuotasMap[numOp] = [];
+          cuotasMap[numOp].push({
+            id: uid('c'),
+            numero: parseInt(row.Numero,10) || (cuotasMap[numOp].length+1),
+            fecha: fecha,
+            capital: parseFloat(row.Capital)||0,
+            interes: parseFloat(row.Interes)||0,
+            estado: String(row.Estado||'Pendiente').trim()==='Pagada' ? 'Pagada' : 'Pendiente'
+          });
+        });
+      }
+
+      // 2) leer préstamos y asignar cuotas (manuales si existen, si no autogeneradas)
+      if(wb.SheetNames.indexOf('Prestamos')!==-1){
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets['Prestamos'], {defval:''});
+        rows.forEach(function(row){
+          const banco = String(row.Banco||'').trim();
+          if(!banco) return;
+          const numeroOperacion = String(row.NumeroOperacion||'').trim();
+          const sistemaRaw = String(row.Sistema||'Frances').trim();
+          const sistema = SISTEMA_LABELS[sistemaRaw] ? sistemaRaw : 'Frances';
+          const montoOriginal = parseFloat(row.MontoOriginal)||0;
+          const tasaAnual = parseFloat(row.TasaAnual)||0;
+          const fechaInicio = toISODate(row.FechaInicio);
+          const plazoMeses = parseInt(row.PlazoMeses,10)||null;
+          const graciaMeses = parseInt(row.MesesGracia,10)||null;
+          const frecuenciaCapital = parseInt(row.FrecuenciaCapital,10)||null;
+
+          const loan = {
+            id: uid('l'), banco: banco, numeroOperacion: numeroOperacion,
+            tipoCuota: sistema, montoOriginal: montoOriginal, tasaAnual: tasaAnual,
+            fechaInicio: fechaInicio, plazoMeses: plazoMeses, graciaMeses: graciaMeses,
+            frecuenciaCapital: frecuenciaCapital, notas: String(row.Notas||'').trim(),
+            cuotas: []
+          };
+
+          if(numeroOperacion && cuotasMap[numeroOperacion]){
+            loan.cuotas = cuotasMap[numeroOperacion];
+            addedCuotasManual += loan.cuotas.length;
+            delete cuotasMap[numeroOperacion];
+          }else if(sistema!=='Variable' && montoOriginal>0 && fechaInicio && plazoMeses){
+            loan.cuotas = generateSchedule(montoOriginal, tasaAnual, plazoMeses, fechaInicio, sistema, graciaMeses, frecuenciaCapital);
+            addedCuotasAuto += loan.cuotas.length;
+          }
+          loans.push(loan);
+          addedLoans++;
+        });
+      }
+
+      // 3) pagos y cheques
+      if(wb.SheetNames.indexOf('Pagos')!==-1){
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets['Pagos'], {defval:''});
+        rows.forEach(function(row){
+          const entidad = String(row.Entidad||'').trim();
+          const monto = parseFloat(row.Monto)||0;
+          const fecha = toISODate(row.Fecha);
+          if(!entidad || !monto || !fecha) return;
+          const tipoRaw = String(row.Tipo||'Otro').trim();
+          pagos.push({
+            id: uid('p'),
+            tipo: (tipoRaw==='Cheque'||tipoRaw==='ChequeGrupo') ? tipoRaw : 'Otro',
+            entidad: entidad,
+            concepto: String(row.Concepto||'').trim(),
+            monto: monto, fecha: fecha,
+            estado: String(row.Estado||'Pendiente').trim()==='Pagada' ? 'Pagada' : 'Pendiente'
+          });
+          addedPagos++;
+        });
+      }
+
+      if(addedLoans===0 && addedPagos===0){
+        appAlert('No se encontraron filas válidas para importar. Revisá que el archivo tenga las hojas "Prestamos" y/o "Pagos" con el formato de la plantilla.');
+        return;
+      }
+
+      persist(); persistPagos();
+      renderAll();
+      appAlert('Importación completa:\n\n- '+addedLoans+' préstamo(s)\n- '+addedCuotasManual+' cuota(s) cargada(s) desde la hoja Cuotas\n- '+addedCuotasAuto+' cuota(s) generada(s) automáticamente\n- '+addedPagos+' pago(s)/cheque(s)');
+    }catch(err){
+      console.error(err);
+      appAlert('No se pudo leer el archivo. Verificá que sea un Excel (.xlsx) con el formato de la plantilla.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+
+/* ---------- importación inteligente de cheques (MIDA u otro Excel) ---------- */
+let smartWorkbook = null;
+let smartHeaders = [];
+let smartRows = [];
+let smartModeIsMida = false;
+let midaParsedRows = [];
+const SMART_ALIASES = {
+  banco: ['banco','banco librador','entidad bancaria','banco emisor','banco pagador'],
+  entidad: ['proveedor','beneficiario','razon social','acreedor','cliente','empresa','nombre'],
+  fecha: ['fecha de pago','fecha pago','fecha','vencimiento','fecha de vencimiento','fecha de emision','fecha emision'],
+  monto: ['monto','importe','valor','monto del cheque','monto cheque','total','importe cheque']
+};
+function normalizeHeader(s){
+  return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+function guessColumn(headers, aliases){
+  for(let i=0;i<headers.length;i++){
+    if(aliases.indexOf(normalizeHeader(headers[i]))!==-1) return i;
+  }
+  for(let i=0;i<headers.length;i++){
+    const h = normalizeHeader(headers[i]);
+    for(let j=0;j<aliases.length;j++){
+      if(h.indexOf(aliases[j])!==-1 || aliases[j].indexOf(h)!==-1) return i;
+    }
+  }
+  return -1;
+}
+function cleanNumber(val){
+  if(typeof val === 'number') return val;
+  let s = String(val==null?'':val).trim();
+  s = s.replace(/[^\d.,\-]/g,'');
+  s = s.replace(/[.,]/g,'');
+  return parseFloat(s)||0;
+}
+/* Detecta y parsea reportes de cheques agrupados por cuenta bancaria (formato tipo MIDA):
+   filas "Cuenta : <numero> del <Banco>", subtotales por fecha, y filas de detalle
+   Proveedor | (vacío) | Cheque | Concepto | (vacío) | Fecha | Fec. Pago | ... | Monto */
+function parseMidaChequeReport(aoa){
+  let headerRowIdx = -1;
+  let col = {};
+  // Pasada 1: coincidencia estricta (proveedor + cheque + monto en la misma fila)
+  for(let r=0; r<aoa.length; r++){
+    const row = (aoa[r]||[]).map(normalizeHeader);
+    const hasProveedor = row.indexOf('proveedor')!==-1;
+    const hasCheque = row.indexOf('cheque')!==-1;
+    const hasMonto = row.some(function(c){ return c.indexOf('monto')!==-1; });
+    if(hasProveedor && hasCheque && hasMonto){
+      headerRowIdx = r;
+      col.proveedor = row.indexOf('proveedor');
+      col.cheque = row.indexOf('cheque');
+      col.concepto = row.indexOf('concepto');
+      col.fecha = row.indexOf('fecha');
+      col.fecPago = row.findIndex(function(c){ return c.indexOf('pago')!==-1; });
+      col.monto = row.findIndex(function(c){ return c.indexOf('monto')!==-1; });
+      break;
+    }
+  }
+  // Pasada 2: más flexible (alcanza con "cheque" + ("proveedor" o "concepto" o "monto"))
+  if(headerRowIdx===-1){
+    for(let r=0; r<aoa.length; r++){
+      const row = (aoa[r]||[]).map(normalizeHeader);
+      const idxCheque = row.indexOf('cheque');
+      if(idxCheque===-1) continue;
+      const idxProveedor = row.indexOf('proveedor');
+      const idxMonto = row.findIndex(function(c){ return c.indexOf('monto')!==-1 || c.indexOf('importe')!==-1; });
+      if(idxProveedor===-1 && idxMonto===-1) continue;
+      headerRowIdx = r;
+      col.proveedor = idxProveedor;
+      col.cheque = idxCheque;
+      col.concepto = row.indexOf('concepto');
+      col.fecha = row.indexOf('fecha');
+      col.fecPago = row.findIndex(function(c){ return c.indexOf('pago')!==-1; });
+      col.monto = idxMonto;
+      break;
+    }
+  }
+  if(headerRowIdx===-1) return null;
+
+  const results = [];
+  let currentBanco = '';
+  for(let r=headerRowIdx+1; r<aoa.length; r++){
+    const row = aoa[r]||[];
+    const firstCell = String(row[0]==null?'':row[0]).trim();
+    const allBlank = row.every(function(c){ return String(c==null?'':c).trim()===''; });
+    if(allBlank) continue;
+    if(/^cuenta\s*:/i.test(firstCell)){
+      const m = firstCell.match(/del\s+(.+)$/i);
+      currentBanco = m ? m[1].trim() : firstCell;
+      continue;
+    }
+    if(/^pag\.?\s*\d+\s*de\s*\d+/i.test(firstCell)) continue;
+    if(/^total\s*:?/i.test(firstCell)) continue;
+    const chequeVal = String(row[col.cheque]==null?'':row[col.cheque]).trim();
+    const isDateOnly = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(firstCell);
+    if(isDateOnly && !chequeVal) continue; // línea de subtotal por fecha, se ignora
+
+    const proveedor = String(row[col.proveedor]==null?'':row[col.proveedor]).trim();
+    if(!chequeVal) continue;
+
+    const conceptoTxt = String(row[col.concepto]==null?'':row[col.concepto]).trim();
+    const fechaRaw = (col.fecPago>=0) ? row[col.fecPago] : row[col.fecha];
+    results.push({
+      banco: currentBanco,
+      proveedor: proveedor || conceptoTxt || ('Cheque N° '+chequeVal),
+      cheque: chequeVal,
+      concepto: conceptoTxt,
+      fecha: toISODate(fechaRaw, true),
+      monto: cleanNumber(row[col.monto])
+    });
+  }
+  return results;
+}
+function triggerSmartImport(){
+  if(typeof XLSX==='undefined'){
+    appAlert('No se pudo cargar el lector de Excel (revisá tu conexión a internet e intentá de nuevo).');
+    return;
+  }
+  document.getElementById('smart-import-input').click();
+}
+function handleSmartExcelSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const data = new Uint8Array(ev.target.result);
+      smartWorkbook = XLSX.read(data, {type:'array'});
+      const validSheetNames = smartWorkbook.SheetNames.filter(function(n){ return !!smartWorkbook.Sheets[n]; });
+      if(validSheetNames.length===0){
+        appAlert('El archivo no tiene ninguna hoja legible. Verificá que sea un Excel válido.');
+        return;
+      }
+      const sheetSelect = document.getElementById('si-sheet');
+      sheetSelect.innerHTML = validSheetNames.map(function(n){ return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>'; }).join('');
+      onSmartSheetChange();
+      document.getElementById('smart-import-overlay').classList.add('open');
+    }catch(err){
+      console.error(err);
+      appAlert('No se pudo leer el archivo. Verificá que sea un Excel (.xlsx o .xls) válido.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+function onSmartSheetChange(){
+  const sheetName = document.getElementById('si-sheet').value;
+  const sheet = smartWorkbook.Sheets[sheetName];
+  if(!sheet){
+    document.getElementById('smart-debug').textContent = 'La hoja "'+sheetName+'" no tiene contenido legible.';
+    document.getElementById('smart-import-count').textContent = '0 filas detectadas (hoja vacía)';
+    return;
+  }
+  const aoa = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:true});
+
+  const debugEl = document.getElementById('smart-debug');
+  const debugLines = [];
+  debugLines.push('Hoja: '+sheetName+' · Rango: '+(sheet['!ref']||'desconocido')+' · Filas leídas: '+aoa.length);
+  aoa.slice(0,8).forEach(function(row,i){ debugLines.push('Fila '+i+': '+JSON.stringify(row)); });
+  debugEl.textContent = debugLines.join('\n');
+
+  const midaResults = parseMidaChequeReport(aoa);
+  if(midaResults && midaResults.length>0){
+    smartModeIsMida = true;
+    midaParsedRows = midaResults;
+    document.getElementById('si-mida-note').style.display = 'block';
+    document.getElementById('si-generic-fields').style.display = 'none';
+    document.getElementById('smart-import-subtitle').textContent = 'Reporte de cheques agrupado por cuenta bancaria detectado automáticamente.';
+  }else{
+    smartModeIsMida = false;
+    document.getElementById('si-mida-note').style.display = 'none';
+    document.getElementById('si-generic-fields').style.display = 'grid';
+    document.getElementById('smart-import-subtitle').textContent = 'Detectamos las columnas del archivo. Revisá que coincidan y confirmá qué tipo de pago es.';
+
+    // usar como fila de encabezado la primera fila no vacía (por si hay filas en blanco arriba)
+    let headerRowIdx2 = 0;
+    for(let i=0;i<aoa.length;i++){
+      if((aoa[i]||[]).some(function(v){ return String(v).trim()!==''; })){ headerRowIdx2 = i; break; }
+    }
+    smartHeaders = (aoa[headerRowIdx2]||[]).map(function(h){ return String(h==null?'':h).trim(); });
+    smartRows = aoa.slice(headerRowIdx2+1).filter(function(row){ return row.some(function(v){ return String(v).trim()!==''; }); });
+
+    const idxBanco = guessColumn(smartHeaders, SMART_ALIASES.banco);
+    const idxEntidad = guessColumn(smartHeaders, SMART_ALIASES.entidad);
+    const idxFecha = guessColumn(smartHeaders, SMART_ALIASES.fecha);
+    const idxMonto = guessColumn(smartHeaders, SMART_ALIASES.monto);
+
+    function fillSelect(id, guessIdx, allowNone){
+      const sel = document.getElementById(id);
+      let opts = allowNone ? '<option value="-1">(ninguna)</option>' : '';
+      opts += smartHeaders.map(function(h,i){ return '<option value="'+i+'"'+(i===guessIdx?' selected':'')+'>'+escapeHtml(h||('Columna '+(i+1)))+'</option>'; }).join('');
+      sel.innerHTML = opts;
+      if(guessIdx===-1 && allowNone) sel.value = '-1';
+    }
+    fillSelect('si-col-banco', idxBanco, true);
+    fillSelect('si-col-entidad', idxEntidad, false);
+    fillSelect('si-col-fecha', idxFecha, false);
+    fillSelect('si-col-monto', idxMonto, false);
+  }
+  refreshCurrentPreview();
+}
+function refreshCurrentPreview(){
+  if(smartModeIsMida) renderMidaPreview();
+  else refreshSmartPreview();
+}
+function renderMidaPreview(){
+  const preview = midaParsedRows.slice(0,8);
+  const table = document.getElementById('smart-preview-table');
+  if(preview.length===0){
+    table.innerHTML = '<tr><td class="empty" style="border:none;">No se encontraron cheques en el reporte.</td></tr>';
+  }else{
+    table.innerHTML = '<tr><th>Banco</th><th>Proveedor</th><th class="mono">N° Cheque</th><th>Concepto</th><th class="mono">Fecha de pago</th><th class="mono">Monto</th></tr>' +
+      preview.map(function(r){
+        return '<tr>' +
+          '<td>'+escapeHtml(r.banco||'—')+'</td>' +
+          '<td>'+escapeHtml(r.proveedor)+'</td>' +
+          '<td class="mono">'+escapeHtml(r.cheque)+'</td>' +
+          '<td>'+escapeHtml(r.concepto)+'</td>' +
+          '<td class="mono">'+formatDate(r.fecha)+'</td>' +
+          '<td class="mono">'+money(r.monto)+'</td>' +
+        '</tr>';
+      }).join('');
+  }
+  document.getElementById('smart-import-count').textContent = midaParsedRows.length + ' cheque(s) detectado(s) en el reporte';
+}
+function refreshSmartPreview(){
+  const idxBanco = parseInt(document.getElementById('si-col-banco').value,10);
+  const idxEntidad = parseInt(document.getElementById('si-col-entidad').value,10);
+  const idxFecha = parseInt(document.getElementById('si-col-fecha').value,10);
+  const idxMonto = parseInt(document.getElementById('si-col-monto').value,10);
+
+  const preview = smartRows.slice(0,6);
+  const table = document.getElementById('smart-preview-table');
+  if(preview.length===0){
+    table.innerHTML = '<tr><td class="empty" style="border:none;">La hoja no tiene filas de datos.</td></tr>';
+  }else{
+    table.innerHTML = '<tr><th>Banco</th><th>Proveedor / entidad</th><th>Fecha</th><th class="mono">Monto</th></tr>' +
+      preview.map(function(row){
+        return '<tr>' +
+          '<td>'+escapeHtml(idxBanco>=0 ? row[idxBanco] : '—')+'</td>' +
+          '<td>'+escapeHtml(row[idxEntidad]||'')+'</td>' +
+          '<td class="mono">'+formatDate(toISODate(row[idxFecha]))+'</td>' +
+          '<td class="mono">'+money(cleanNumber(row[idxMonto]))+'</td>' +
+        '</tr>';
+      }).join('');
+  }
+  document.getElementById('smart-import-count').textContent = smartRows.length + ' fila(s) detectada(s) en la hoja';
+}
+function closeSmartImport(){
+  document.getElementById('smart-import-overlay').classList.remove('open');
+}
+function pagoDedupeKey(p){
+  // Si el concepto incluye el N° de cheque, ese número es el identificador más confiable
+  // (el mismo cheque puede haberse cargado con distinto tipo o entidad por error).
+  const chequeMatch = (p.concepto||'').match(/Cheque\s*N[°ºo]\.?\s*(\d+)/i);
+  if(chequeMatch){
+    return 'cheque:' + chequeMatch[1] + '|' + p.monto + '|' + p.fecha;
+  }
+  return [p.tipo, (p.entidad||'').trim().toLowerCase(), p.monto, p.fecha, (p.concepto||'').trim().toLowerCase()].join('|');
+}
+function confirmSmartImport(){
+  const tipo = document.getElementById('si-tipo').value;
+  let added=0, skipped=0, duplicados=0;
+  const existingKeys = {};
+  pagos.forEach(function(p){ existingKeys[pagoDedupeKey(p)] = true; });
+
+  if(smartModeIsMida){
+    midaParsedRows.forEach(function(r){
+      if(!r.proveedor || !r.monto || r.monto<=0 || !r.fecha){ skipped++; return; }
+      const conceptoParts = [];
+      if(r.banco) conceptoParts.push('Banco: '+r.banco);
+      if(r.cheque) conceptoParts.push('Cheque N° '+r.cheque);
+      if(r.concepto) conceptoParts.push(r.concepto);
+      const nuevoPago = {
+        id: uid('p'), tipo: tipo, entidad: r.proveedor,
+        concepto: conceptoParts.join(' · '),
+        monto: r.monto, fecha: r.fecha, estado: 'Pendiente'
+      };
+      const key = pagoDedupeKey(nuevoPago);
+      if(existingKeys[key]){ duplicados++; return; }
+      existingKeys[key] = true;
+      pagos.push(nuevoPago);
+      added++;
+    });
+  }else{
+    const idxBanco = parseInt(document.getElementById('si-col-banco').value,10);
+    const idxEntidad = parseInt(document.getElementById('si-col-entidad').value,10);
+    const idxFecha = parseInt(document.getElementById('si-col-fecha').value,10);
+    const idxMonto = parseInt(document.getElementById('si-col-monto').value,10);
+    smartRows.forEach(function(row){
+      const entidad = String(row[idxEntidad]||'').trim();
+      const monto = cleanNumber(row[idxMonto]);
+      const fecha = toISODate(row[idxFecha]);
+      if(!entidad || !monto || monto<=0 || !fecha){ skipped++; return; }
+      const banco = idxBanco>=0 ? String(row[idxBanco]||'').trim() : '';
+      const nuevoPago = {
+        id: uid('p'), tipo: tipo, entidad: entidad,
+        concepto: banco ? ('Banco: '+banco) : '',
+        monto: monto, fecha: fecha, estado: 'Pendiente'
+      };
+      const key = pagoDedupeKey(nuevoPago);
+      if(existingKeys[key]){ duplicados++; return; }
+      existingKeys[key] = true;
+      pagos.push(nuevoPago);
+      added++;
+    });
+  }
+
+  persistPagos();
+  closeSmartImport();
+  renderAll();
+  let msg = 'Importación completa: '+added+' cheque(s)/pago(s) nuevo(s) agregado(s) como "'+pagoTipoLabel(tipo)+'".';
+  if(duplicados>0) msg += '\n'+duplicados+' ya estaban cargados (mismo tipo, entidad, monto, fecha y concepto) y se omitieron para no duplicar.';
+  if(skipped>0) msg += '\n'+skipped+' fila(s) se omitieron por no tener proveedor, fecha o monto válido.';
+  appAlert(msg);
+}
+
+/* ---------- cálculos ---------- */
+function loanTotals(loan){
+  let saldoPendiente=0, interesPagado=0, interesPendiente=0, gastosPagados=0, gastosPendientes=0, cuotasPend=0, cuotasPag=0, proxima=null;
+  loan.cuotas.forEach(function(c){
+    const gastos = c.gastos||0;
+    if(c.estado==='Pendiente'){
+      saldoPendiente += c.capital;
+      interesPendiente += c.interes;
+      gastosPendientes += gastos;
+      cuotasPend++;
+      if(!proxima || c.fecha < proxima.fecha) proxima = c;
+    }else{
+      interesPagado += c.interes;
+      gastosPagados += gastos;
+      cuotasPag++;
+    }
+  });
+  return {
+    saldoPendiente:saldoPendiente,
+    interesPagado:interesPagado, interesPendiente:interesPendiente, interesTotal: interesPagado+interesPendiente,
+    gastosPagados:gastosPagados, gastosPendientes:gastosPendientes, gastosTotal: gastosPagados+gastosPendientes,
+    costoFinancieroTotal: interesPagado+interesPendiente+gastosPagados+gastosPendientes,
+    cuotasPend:cuotasPend, cuotasPag:cuotasPag, proxima:proxima
+  };
+}
+function globalStats(){
+  let saldoPendienteTotal=0, interesPagado=0, interesPendiente=0, gastosPagados=0, gastosPendientes=0, vencidas=0, porVencer=0;
+  loans.forEach(function(l){
+    l.cuotas.forEach(function(c){
+      const gastos = c.gastos||0;
+      if(c.estado==='Pendiente'){
+        saldoPendienteTotal += c.capital;
+        interesPendiente += c.interes;
+        gastosPendientes += gastos;
+        const d = daysUntil(c.fecha);
+        if(d<0) vencidas++;
+        else if(d<=7) porVencer++;
+      }else{
+        interesPagado += c.interes;
+        gastosPagados += gastos;
+      }
+    });
+  });
+  return {
+    saldoPendienteTotal:saldoPendienteTotal,
+    interesPagado:interesPagado, interesPendiente:interesPendiente, interesTotal: interesPagado+interesPendiente,
+    gastosPagados:gastosPagados, gastosPendientes:gastosPendientes, gastosTotal: gastosPagados+gastosPendientes,
+    costoFinancieroTotal: interesPagado+interesPendiente+gastosPagados+gastosPendientes,
+    vencidas:vencidas, porVencer:porVencer
+  };
+}
+function byBank(){
+  const map = {};
+  loans.forEach(function(l){
+    if(!map[l.banco]) map[l.banco] = {banco:l.banco, prestamos:0, saldoPendiente:0, interesTotal:0, gastosTotal:0, proxima:null};
+    const t = loanTotals(l);
+    map[l.banco].prestamos++;
+    map[l.banco].saldoPendiente += t.saldoPendiente;
+    map[l.banco].interesTotal += t.interesTotal;
+    map[l.banco].gastosTotal += t.gastosTotal;
+    if(t.proxima && (!map[l.banco].proxima || t.proxima.fecha < map[l.banco].proxima.fecha)){
+      map[l.banco].proxima = t.proxima;
+    }
+  });
+  return Object.values(map).sort(function(a,b){ return b.saldoPendiente - a.saldoPendiente; });
+}
+function byMonth(){
+  const map = {};
+  loans.forEach(function(l){
+    l.cuotas.forEach(function(c){
+      if(c.estado!=='Pendiente') return;
+      const gastos = c.gastos||0;
+      const key = monthKey(c.fecha);
+      if(!map[key]) map[key] = {key:key, capital:0, interes:0, gastos:0, total:0, bancos:new Set()};
+      map[key].capital += c.capital;
+      map[key].interes += c.interes;
+      map[key].gastos += gastos;
+      map[key].total += c.capital + c.interes + gastos;
+      map[key].bancos.add(l.banco);
+    });
+  });
+  const rows = Object.values(map).sort(function(a,b){ return a.key.localeCompare(b.key); });
+  rows.forEach(function(r){
+    r.ingreso = incomes[r.key] || 0;
+    r.neto = r.ingreso - r.total;
+  });
+  return rows;
+}
+/* ---------- feriados de Paraguay y días hábiles ---------- */
+function getEasterISO(year){
+  const a = year % 19, b = Math.floor(year/100), c = year % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+  const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
+  const i = Math.floor(c/4), k = c % 4;
+  const l = (32+2*e+2*i-h-k) % 7, m = Math.floor((a+11*h+22*l)/451);
+  const monthDay = h+l-7*m+114;
+  const month = Math.floor(monthDay/31);
+  const day = (monthDay % 31) + 1;
+  return year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+let _holidayCache = {};
+function getParaguayHolidays(year){
+  if(_holidayCache[year]) return _holidayCache[year];
+  const fixed = [[1,1],[3,1],[5,1],[5,14],[5,15],[6,12],[8,15],[9,29],[12,8],[12,25]];
+  const list = fixed.map(function(md){ return year+'-'+String(md[0]).padStart(2,'0')+'-'+String(md[1]).padStart(2,'0'); });
+  const easter = getEasterISO(year);
+  list.push(addDaysISO(easter,-3)); // Jueves Santo
+  list.push(addDaysISO(easter,-2)); // Viernes Santo
+  _holidayCache[year] = list;
+  return list;
+}
+function isWeekendISO(dateISO){
+  const d = new Date(dateISO+'T00:00:00').getDay();
+  return d===0 || d===6;
+}
+function isHolidayISO(dateISO){
+  const year = parseInt(dateISO.slice(0,4),10);
+  return getParaguayHolidays(year).indexOf(dateISO)!==-1;
+}
+function nextBusinessDay(dateISO){
+  let d = dateISO;
+  let guard = 0;
+  while((isWeekendISO(d) || isHolidayISO(d)) && guard<15){
+    d = addDaysISO(d, 1);
+    guard++;
+  }
+  return d;
+}
+function allObligaciones(){
+  const items = [];
+  loans.forEach(function(l){
+    l.cuotas.forEach(function(c){
+      if(c.estado!=='Pendiente') return;
+      items.push({
+        fuente:'Prestamo', fuenteLabel:'Préstamo',
+        entidad:l.banco,
+        detalle:(l.numeroOperacion||'s/n')+' · Cuota N°'+c.numero,
+        monto:c.capital+c.interes+(c.gastos||0), capital:c.capital, interes:c.interes, gastos:(c.gastos||0),
+        fecha:c.fecha, fechaEfectiva: nextBusinessDay(c.fecha), d:daysUntil(c.fecha),
+        loanId:l.id, cuotaId:c.id
+      });
+    });
+  });
+  pagos.forEach(function(p){
+    if(p.estado!=='Pendiente') return;
+    items.push({
+      fuente:p.tipo, fuenteLabel: pagoTipoLabel(p.tipo),
+      entidad:p.entidad, detalle:p.concepto || '—',
+      monto:p.monto, capital:p.monto, interes:0,
+      fecha:p.fecha, fechaEfectiva: nextBusinessDay(p.fecha), d:daysUntil(p.fecha),
+      pagoId:p.id
+    });
+  });
+  return items;
+}
+function priorityList(entidadFilter){
+  const rows = allObligaciones().filter(function(it){ return !entidadFilter || it.entidad===entidadFilter; });
+  rows.sort(function(a,b){ return a.d - b.d; });
+  return rows;
+}
+function obligacionesByDay(){
+  const map = {};
+  allObligaciones().forEach(function(it){
+    const key = it.fechaEfectiva || it.fecha;
+    if(!map[key]) map[key] = {fecha:key, total:0, prestamos:0, cheques:0, chequesGrupo:0, otros:0, items:[]};
+    map[key].total += it.monto;
+    if(it.fuente==='Prestamo') map[key].prestamos += it.monto;
+    else if(it.fuente==='Cheque') map[key].cheques += it.monto;
+    else if(it.fuente==='ChequeGrupo') map[key].chequesGrupo += it.monto;
+    else map[key].otros += it.monto;
+    map[key].items.push(it);
+  });
+  return Object.values(map).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+}
+function markObligacionPaid(loanId, cuotaId, pagoId){
+  if(loanId && cuotaId){
+    const loan = loans.find(function(l){ return l.id===loanId; });
+    if(loan){ const c = loan.cuotas.find(function(c){ return c.id===cuotaId; }); if(c){ c.estado='Pagada'; persist(); } }
+  }else if(pagoId){
+    const p = pagos.find(function(p){ return p.id===pagoId; });
+    if(p){ p.estado='Pagada'; persistPagos(); }
+  }
+  renderAll();
+}
+
+/* ---------- render: stats + alertas ---------- */
+function renderStats(){
+  const s = globalStats();
+  const wrap = document.getElementById('stats');
+  wrap.innerHTML =
+    '<div class="stat">' +
+      '<div class="stat-label">Deuda pendiente (capital)</div>' +
+      '<div class="stat-value">'+money(s.saldoPendienteTotal)+'</div>' +
+      '<div class="stat-sub">'+loans.length+' préstamo'+(loans.length===1?'':'s')+' registrados</div>' +
+    '</div>' +
+    '<div class="stat">' +
+      '<div class="stat-label">Interés puro (pagado + pendiente)</div>' +
+      '<div class="stat-value">'+money(s.interesTotal)+'</div>' +
+      '<div class="stat-sub">'+money(s.interesPagado)+' pagado · '+money(s.interesPendiente)+' pendiente</div>' +
+    '</div>' +
+    '<div class="stat">' +
+      '<div class="stat-label">Gastos admin. / bancarios</div>' +
+      '<div class="stat-value">'+money(s.gastosTotal)+'</div>' +
+      '<div class="stat-sub">Impuestos, seguros y comisiones</div>' +
+    '</div>' +
+    '<div class="stat">' +
+      '<div class="stat-label">Costo financiero total</div>' +
+      '<div class="stat-value">'+money(s.costoFinancieroTotal)+'</div>' +
+      '<div class="stat-sub">Interés + gastos administrativos</div>' +
+    '</div>' +
+    '<div class="stat '+(s.vencidas>0?'alert':'')+'">' +
+      '<div class="stat-label">Cuotas vencidas / por vencer</div>' +
+      '<div class="stat-value">'+(s.vencidas + s.porVencer)+'</div>' +
+      '<div class="stat-sub">'+s.vencidas+' vencidas · '+s.porVencer+' en 7 días</div>' +
+    '</div>';
+}
+function renderBackupReminder(){
+  const container = document.getElementById('backup-reminder-container');
+  let last;
+  try{ last = localStorage.getItem(BACKUP_DATE_KEY); }catch(e){ last = null; }
+  if(loans.length===0 && pagos.length===0){ container.innerHTML=''; return; }
+  let dias = null;
+  if(last){
+    dias = Math.round((new Date(todayISOStr()+'T00:00:00') - new Date(last+'T00:00:00')) / 86400000);
+  }
+  if(last && dias<14){ container.innerHTML=''; return; }
+  const msg = last
+    ? 'Hace '+dias+' días que no exportás una copia de seguridad.'
+    : 'Todavía no exportaste ninguna copia de seguridad.';
+  container.innerHTML = '<div class="banner" style="background:var(--amber-dim);border-color:var(--amber);">' +
+    '<div class="banner-title" style="color:#e8bd82;">⚠ '+msg+'</div>' +
+    '<button class="btn-ghost btn-small" style="border-color:var(--amber);color:#e8bd82;" onclick="exportBackup()">Exportar ahora</button>' +
+  '</div>';
+}
+function renderBanner(){
+  const alerts = [];
+  loans.forEach(function(l){
+    l.cuotas.forEach(function(c){
+      if(c.estado!=='Pendiente') return;
+      const d = daysUntil(c.fecha);
+      if(d<0 || d<=7) alerts.push({loan:l, cuota:c, d:d});
+    });
+  });
+  const bannerC = document.getElementById('banner-container');
+  if(alerts.length===0){ bannerC.innerHTML=''; return; }
+  alerts.sort(function(a,b){ return a.d-b.d; });
+  let items='';
+  alerts.forEach(function(a){
+    const txt = a.d<0 ? (escapeHtml(a.loan.banco)+' cuota N°'+a.cuota.numero+' · '+Math.abs(a.d)+'d vencida') : (escapeHtml(a.loan.banco)+' cuota N°'+a.cuota.numero+' · vence en '+a.d+'d');
+    items += '<span>'+txt+'</span>';
+  });
+  bannerC.innerHTML = '<div class="banner"><div class="banner-title">⚠ Cuotas que requieren atención</div><div class="banner-items">'+items+'</div></div>';
+}
+
+/* ---------- render: tabs ---------- */
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('panel-'+tab).classList.add('active');
+  renderActivePanel();
+}
+function renderActivePanel(){
+  if(activeTab==='priority') renderPriorityTab();
+  else if(activeTab==='flujo') renderFlujoTab();
+  else if(activeTab==='loans') renderLoansTab();
+  else if(activeTab==='pagos') renderPagosTab();
+  else if(activeTab==='bank') renderBankTab();
+  else if(activeTab==='month') renderMonthTab();
+  else if(activeTab==='stats') renderStatsTab();
+}
+
+function renderPriorityTab(){
+  const select = document.getElementById('priority-bank-filter');
+  const currentVal = select.value;
+  const entidades = Array.from(new Set(allObligaciones().map(function(it){ return it.entidad; }))).sort();
+  select.innerHTML = '<option value="">Todas las entidades</option>' + entidades.map(function(b){
+    return '<option value="'+escapeHtml(b)+'"'+(b===currentVal?' selected':'')+'>'+escapeHtml(b)+'</option>';
+  }).join('');
+
+  const rows = priorityList(select.value);
+  const table = document.getElementById('priority-table');
+  if(rows.length===0){
+    table.innerHTML = '<tr><td class="empty" style="border:none;">No hay obligaciones pendientes para mostrar.</td></tr>';
+    return;
+  }
+  const body = rows.map(function(r){
+    let badge;
+    if(r.d<0){ badge='<span class="badge badge-late">Vencida</span>'; }
+    else if(r.d<=7){ badge='<span class="badge badge-warn">Esta semana</span>'; }
+    else if(r.d<=30){ badge='<span class="badge badge-ok">Este mes</span>'; }
+    else { badge='<span class="pill">Más adelante</span>'; }
+    return '<tr>' +
+      '<td>'+badge+'</td>' +
+      '<td>'+escapeHtml(r.fuenteLabel)+'</td>' +
+      '<td>'+escapeHtml(r.entidad)+'</td>' +
+      '<td class="mono">'+escapeHtml(r.detalle)+'</td>' +
+      '<td class="mono">'+formatDate(r.fecha)+'</td>' +
+      '<td class="mono">'+money(r.monto)+'</td>' +
+      '<td class="row-actions">' +
+        '<button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(r.loanId||'')+'\',\''+(r.cuotaId||'')+'\',\''+(r.pagoId||'')+'\')">✓</button>' +
+        (r.loanId ? '<button class="btn-ghost btn-small" onclick="openDetail(\''+r.loanId+'\')">Ver</button>' : '') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  let totalMonto=0;
+  rows.forEach(function(r){ totalMonto+=r.monto; });
+  table.innerHTML =
+    '<tr><th>Estado</th><th>Fuente</th><th>Entidad</th><th>Detalle</th><th class="mono">Vencimiento</th><th class="mono">Monto</th><th style="text-align:right;">Acciones</th></tr>' +
+    body +
+    '<tr class="total-row"><td colspan="5">Total pendiente ('+(select.value||'todas las entidades')+')</td><td class="mono">'+money(totalMonto)+'</td><td></td></tr>';
+}
+
+/* ---------- resumen de préstamos (Excel / PDF) ---------- */
+function openResumenModal(){
+  const bancos = Array.from(new Set(loans.map(function(l){ return l.banco; }))).sort();
+  const sel = document.getElementById('resumen-banco');
+  sel.innerHTML = '<option value="">Todos los bancos</option>' + bancos.map(function(b){
+    return '<option value="'+escapeHtml(b)+'">'+escapeHtml(b)+'</option>';
+  }).join('');
+  document.getElementById('resumen-overlay').classList.add('open');
+}
+function closeResumenModal(){
+  document.getElementById('resumen-overlay').classList.remove('open');
+}
+function buildResumenRows(bancoFiltro){
+  return loans
+    .filter(function(l){ return !bancoFiltro || l.banco===bancoFiltro; })
+    .map(function(l){
+      const t = loanTotals(l);
+      return {
+        'Banco': l.banco,
+        'N° Operación': l.numeroOperacion || 's/n',
+        'Sistema': SISTEMA_LABELS[l.tipoCuota] || l.tipoCuota,
+        'Monto Original (Gs.)': l.montoOriginal || 0,
+        'Tasa Anual (%)': l.tasaAnual || 0,
+        'Saldo Pendiente (Gs.)': t.saldoPendiente,
+        'Interés Pagado (Gs.)': t.interesPagado,
+        'Interés Pendiente (Gs.)': t.interesPendiente,
+        'Gastos Admin. (Gs.)': t.gastosTotal,
+        'Costo Financiero Total (Gs.)': t.costoFinancieroTotal,
+        'Cuotas Pagadas': t.cuotasPag,
+        'Cuotas Pendientes': t.cuotasPend,
+        'Próximo Vencimiento': t.proxima ? formatDate(t.proxima.fecha) : '—'
+      };
+    });
+}
+function buildProformaBlocks(bancoFiltro){
+  const byBanco = {};
+  loans
+    .filter(function(l){ return !bancoFiltro || l.banco===bancoFiltro; })
+    .forEach(function(l){
+      const sorted = l.cuotas.slice().sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+      let saldo = l.montoOriginal || 0;
+      const cuotasPend = [];
+      sorted.forEach(function(c){
+        const saldoAntes = saldo;
+        saldo -= c.capital;
+        if(c.estado!=='Pendiente') return;
+        cuotasPend.push({
+          numero: c.numero, fecha: c.fecha,
+          saldoCapital: Math.max(0, Math.round(saldoAntes)),
+          capital: c.capital, interes: c.interes, gastos: c.gastos||0,
+          total: c.capital + c.interes + (c.gastos||0)
+        });
+      });
+      if(cuotasPend.length===0) return;
+      if(!byBanco[l.banco]) byBanco[l.banco] = [];
+      byBanco[l.banco].push({
+        numeroOperacion: l.numeroOperacion || 's/n',
+        montoOriginal: l.montoOriginal || 0,
+        tasaAnual: l.tasaAnual || 0,
+        sistema: SISTEMA_LABELS[l.tipoCuota] || l.tipoCuota,
+        cuotas: cuotasPend
+      });
+    });
+  return Object.keys(byBanco).sort().map(function(banco){ return { banco: banco, loans: byBanco[banco] }; });
+}
+function descargarResumen(){
+  const bancoFiltro = document.getElementById('resumen-banco').value;
+  const formato = document.getElementById('resumen-formato').value;
+  const rows = buildResumenRows(bancoFiltro);
+  if(rows.length===0){
+    appAlert('No hay préstamos cargados para ese banco.');
+    return;
+  }
+  const blocks = buildProformaBlocks(bancoFiltro);
+  const nombreBanco = bancoFiltro ? bancoFiltro.replace(/[^\w]+/g,'_') : 'todos_los_bancos';
+  const fechaHoy = todayISOStr();
+
+  if(formato==='excel'){
+    if(typeof XLSX==='undefined'){
+      appAlert('No se pudo cargar el generador de Excel (revisá tu conexión a internet).');
+      return;
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Resumen');
+
+    const aoa = [];
+    blocks.forEach(function(b){
+      aoa.push(['BANCO: '+b.banco]);
+      aoa.push([]);
+      b.loans.forEach(function(l){
+        aoa.push(['N° Operación: '+l.numeroOperacion, '', 'Monto: '+money(l.montoOriginal), '', 'Tasa: '+l.tasaAnual+'%', '', 'Sistema: '+l.sistema]);
+        aoa.push(['Cuota','Vencimiento','Saldo Capital (Gs.)','Capital (Gs.)','Interés (Gs.)','Gastos (Gs.)','Total Cuota (Gs.)']);
+        l.cuotas.forEach(function(c){
+          aoa.push([c.numero, formatDate(c.fecha), c.saldoCapital, c.capital, c.interes, c.gastos, c.total]);
+        });
+        aoa.push([]);
+      });
+    });
+    const wsDetalle = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, wsDetalle, 'Cuotas Pendientes');
+    XLSX.writeFile(wb, 'resumen_prestamos_'+nombreBanco+'_'+fechaHoy+'.xlsx');
+  }else{
+    if(typeof window.jspdf==='undefined'){
+      appAlert('No se pudo cargar el generador de PDF (revisá tu conexión a internet).');
+      return;
+    }
+    const doc = new window.jspdf.jsPDF({orientation:'landscape'});
+    const pageHeight = doc.internal.pageSize.getHeight();
+    doc.setFontSize(14);
+    doc.text('Resumen de préstamos'+(bancoFiltro?' — '+bancoFiltro:''), 14, 15);
+    doc.setFontSize(9);
+    doc.text('Generado el '+formatDate(fechaHoy), 14, 21);
+    const head = [['Banco','N° Op.','Sistema','Monto Original','Tasa','Saldo Pendiente','Interés Total','Gastos','Costo Financ. Total','Cuotas','Próx. Vto.']];
+    const body = rows.map(function(r){
+      return [
+        r['Banco'], r['N° Operación'], r['Sistema'],
+        money(r['Monto Original (Gs.)']), r['Tasa Anual (%)']+'%',
+        money(r['Saldo Pendiente (Gs.)']),
+        money(r['Interés Pagado (Gs.)']+r['Interés Pendiente (Gs.)']),
+        money(r['Gastos Admin. (Gs.)']),
+        money(r['Costo Financiero Total (Gs.)']),
+        r['Cuotas Pagadas']+' pag. / '+r['Cuotas Pendientes']+' pend.',
+        r['Próximo Vencimiento']
+      ];
+    });
+    doc.autoTable({ head:head, body:body, startY:26, styles:{fontSize:8}, headStyles:{fillColor:[26,32,41]} });
+
+    doc.addPage();
+    let cursorY = 18;
+    function ensureSpace(needed){
+      if(cursorY + needed > pageHeight - 12){
+        doc.addPage();
+        cursorY = 18;
+      }
+    }
+    blocks.forEach(function(b){
+      ensureSpace(12);
+      doc.setFontSize(13);
+      doc.setTextColor(20);
+      doc.text('Banco: '+b.banco, 14, cursorY);
+      cursorY += 7;
+      b.loans.forEach(function(l){
+        ensureSpace(14);
+        doc.setFontSize(9);
+        doc.setTextColor(80);
+        doc.text('N° Operación: '+l.numeroOperacion+'   ·   Monto: '+money(l.montoOriginal)+'   ·   Tasa: '+l.tasaAnual+'%   ·   Sistema: '+l.sistema, 14, cursorY);
+        cursorY += 5;
+        const cuotaHead = [['Cuota','Vencimiento','Saldo Capital','Capital','Interés','Gastos','Total Cuota']];
+        const cuotaBody = l.cuotas.map(function(c){
+          return [c.numero, formatDate(c.fecha), money(c.saldoCapital), money(c.capital), money(c.interes), money(c.gastos), money(c.total)];
+        });
+        doc.autoTable({ head:cuotaHead, body:cuotaBody, startY:cursorY, styles:{fontSize:8}, headStyles:{fillColor:[60,70,84]}, margin:{left:14,right:14} });
+        cursorY = doc.lastAutoTable.finalY + 10;
+      });
+    });
+
+    doc.save('resumen_prestamos_'+nombreBanco+'_'+fechaHoy+'.pdf');
+  }
+  closeResumenModal();
+}
+let showArchivedLoans = false;
+function toggleArchivedLoans(){
+  showArchivedLoans = !showArchivedLoans;
+  renderLoansTab();
+}
+function archivarLoan(id){
+  const l = loans.find(function(l){ return l.id===id; });
+  if(!l) return;
+  l.archivado = true;
+  persist();
+  renderAll();
+}
+function desarchivarLoan(id){
+  const l = loans.find(function(l){ return l.id===id; });
+  if(!l) return;
+  l.archivado = false;
+  persist();
+  renderAll();
+}
+function loanCardHtml(l, isArchived){
+  const t = loanTotals(l);
+  let badge = '<span class="badge badge-ok">Al día</span>';
+  if(isArchived){
+    badge = '<span class="pill">Finalizado</span>';
+  }else if(t.proxima){
+    const d = daysUntil(t.proxima.fecha);
+    if(d<0) badge = '<span class="badge badge-late">Vencida</span>';
+    else if(d<=7) badge = '<span class="badge badge-warn">Por vencer</span>';
+  }
+  const totalmentePagado = t.saldoPendiente<=0 && t.cuotasPend===0;
+  return '<div class="loan-card">' +
+    '<div>' +
+      '<div class="lc-title">'+escapeHtml(l.banco)+'</div>' +
+      '<div class="lc-sub">'+escapeHtml(l.numeroOperacion||'s/n')+' · '+escapeHtml(SISTEMA_LABELS[l.tipoCuota]||l.tipoCuota)+' · '+l.tasaAnual+'% anual</div>' +
+    '</div>' +
+    '<div>' +
+      '<div class="lc-label">Saldo pendiente</div>' +
+      '<div class="lc-value">'+money(t.saldoPendiente)+'</div>' +
+    '</div>' +
+    '<div>' +
+      '<div class="lc-label">Cuotas</div>' +
+      '<div class="lc-value">'+t.cuotasPag+' pagadas / '+t.cuotasPend+' pendientes</div>' +
+    '</div>' +
+    '<div>' +
+      '<div class="lc-label">Próximo vencimiento</div>' +
+      '<div class="lc-value">'+(t.proxima ? formatDate(t.proxima.fecha) : '—')+'</div>' +
+      '<div style="margin-top:5px;">'+badge+'</div>' +
+    '</div>' +
+    '<div class="row-actions">' +
+      (isArchived
+        ? '<button class="btn-ghost btn-small" onclick="desarchivarLoan(\''+l.id+'\')">Desarchivar</button>'
+        : (totalmentePagado ? '<button class="btn-ghost btn-small" onclick="archivarLoan(\''+l.id+'\')">Archivar</button>' : '')
+      ) +
+      '<button class="btn-ghost btn-small" onclick="openDetail(\''+l.id+'\')">Ver cronograma</button>' +
+    '</div>' +
+  '</div>';
+}
+function renderLoansTab(){
+  const wrap = document.getElementById('loan-cards');
+  if(loans.length===0){
+    wrap.innerHTML = '<div class="empty"><b>Todavía no hay préstamos cargados</b>Agregá el primero con "+ Nuevo préstamo" y después cargá su cronograma de cuotas.</div>';
+    return;
+  }
+  const activos = loans.filter(function(l){ return !l.archivado; });
+  const archivados = loans.filter(function(l){ return l.archivado; });
+
+  const sorted = activos.slice().sort(function(a,b){
+    const ta=loanTotals(a), tb=loanTotals(b);
+    const da = ta.proxima ? daysUntil(ta.proxima.fecha) : 99999;
+    const db = tb.proxima ? daysUntil(tb.proxima.fecha) : 99999;
+    return da-db;
+  });
+
+  let html = sorted.length>0
+    ? sorted.map(function(l){ return loanCardHtml(l, false); }).join('')
+    : '<div class="empty"><b>No hay préstamos activos</b>Todos tus préstamos están archivados, o agregá uno nuevo.</div>';
+
+  if(archivados.length>0){
+    html += '<div style="margin-top:18px;">' +
+      '<button class="btn-ghost btn-small" onclick="toggleArchivedLoans()">'+(showArchivedLoans?'▾':'▸')+' Préstamos finalizados / archivados ('+archivados.length+')</button>' +
+    '</div>';
+    if(showArchivedLoans){
+      html += '<div class="cards" style="margin-top:10px;">' + archivados.map(function(l){ return loanCardHtml(l, true); }).join('') + '</div>';
+    }
+  }
+  wrap.innerHTML = html;
+}
+
+let expandedBank = null;
+function renderBankTab(){
+  const rows = byBank();
+  const table = document.getElementById('bank-table');
+  if(rows.length===0){
+    table.innerHTML = '<tr><td class="empty" style="border:none;">No hay datos todavía.</td></tr>';
+    return;
+  }
+  let totalSaldo=0, totalInteres=0, totalGastos=0;
+  const body = rows.map(function(r){
+    totalSaldo += r.saldoPendiente; totalInteres += r.interesTotal; totalGastos += r.gastosTotal;
+    const isOpen = expandedBank === r.banco;
+    let out = '<tr style="cursor:pointer;" onclick="toggleBankExpand(\''+escapeHtml(r.banco).replace(/'/g,"\\'")+'\')">' +
+      '<td>'+(isOpen?'▾ ':'▸ ')+escapeHtml(r.banco)+'</td>' +
+      '<td class="mono">'+r.prestamos+'</td>' +
+      '<td class="mono">'+money(r.saldoPendiente)+'</td>' +
+      '<td class="mono">'+(r.proxima ? formatDate(r.proxima.fecha) : '—')+'</td>' +
+      '<td class="mono">'+money(r.interesTotal)+'</td>' +
+      '<td class="mono">'+money(r.gastosTotal)+'</td>' +
+    '</tr>';
+    if(isOpen){
+      const loansOfBank = loans.filter(function(l){ return l.banco===r.banco; });
+      const innerRows = loansOfBank.map(function(l){
+        const t = loanTotals(l);
+        return '<tr>' +
+          '<td>'+escapeHtml(l.numeroOperacion||'s/n')+'</td>' +
+          '<td>'+escapeHtml(SISTEMA_LABELS[l.tipoCuota]||l.tipoCuota)+'</td>' +
+          '<td class="mono">'+money(t.saldoPendiente)+'</td>' +
+          '<td class="mono">'+t.cuotasPag+' pagadas / '+t.cuotasPend+' pendientes</td>' +
+          '<td class="mono">'+(t.proxima ? formatDate(t.proxima.fecha) : '—')+'</td>' +
+          '<td class="mono">'+money(t.interesTotal)+'</td>' +
+          '<td class="mono">'+money(t.gastosTotal)+'</td>' +
+          '<td style="text-align:right;"><button class="btn-ghost btn-small" onclick="event.stopPropagation();openDetail(\''+l.id+'\')">Ver cronograma</button></td>' +
+        '</tr>';
+      }).join('');
+      out += '<tr><td colspan="6" style="padding:0;background:var(--ink-950);">' +
+        '<table class="ltable" style="width:100%;">' +
+          '<tr><th>N° operación</th><th>Sistema</th><th class="mono">Saldo pendiente</th><th class="mono">Cuotas</th><th class="mono">Próximo vencimiento</th><th class="mono">Interés total</th><th class="mono">Gastos</th><th></th></tr>' +
+          innerRows +
+        '</table>' +
+      '</td></tr>';
+    }
+    return out;
+  }).join('');
+  table.innerHTML =
+    '<tr><th>Banco</th><th class="mono">N° préstamos</th><th class="mono">Saldo pendiente</th><th class="mono">Próximo vencimiento</th><th class="mono">Interés total</th><th class="mono">Gastos admin.</th></tr>' +
+    body +
+    '<tr class="total-row"><td>Total</td><td></td><td class="mono">'+money(totalSaldo)+'</td><td></td><td class="mono">'+money(totalInteres)+'</td><td class="mono">'+money(totalGastos)+'</td></tr>';
+}
+function toggleBankExpand(banco){
+  expandedBank = (expandedBank === banco) ? null : banco;
+  renderBankTab();
+}
+
+function renderMonthTab(){
+  const rows = byMonth();
+  const table = document.getElementById('month-table');
+  if(rows.length===0){
+    table.innerHTML = '<tr><td class="empty" style="border:none;">No hay cuotas pendientes cargadas todavía.</td></tr>';
+    return;
+  }
+  let totalCapital=0, totalInteres=0, totalGastos=0, totalTotal=0, totalIngreso=0, totalNeto=0;
+  const body = rows.map(function(r){
+    totalCapital+=r.capital; totalInteres+=r.interes; totalGastos+=r.gastos; totalTotal+=r.total; totalIngreso+=r.ingreso; totalNeto+=r.neto;
+    const netoStyle = r.neto<0 ? 'color:var(--clay);' : 'color:var(--sage);';
+    return '<tr>' +
+      '<td>'+monthLabel(r.key)+'</td>' +
+      '<td class="mono">'+money(r.capital)+'</td>' +
+      '<td class="mono">'+money(r.interes)+'</td>' +
+      '<td class="mono">'+money(r.gastos)+'</td>' +
+      '<td class="mono">'+money(r.total)+'</td>' +
+      '<td class="mono" style="cursor:pointer;text-decoration:underline dotted;" title="Clic para cargar el ingreso de este mes" onclick="openIncomeModal(\''+r.key+'\')">'+money(r.ingreso)+'</td>' +
+      '<td class="mono" style="'+netoStyle+'font-weight:600;">'+money(r.neto)+'</td>' +
+      '<td>'+Array.from(r.bancos).map(function(b){return escapeHtml(b);}).join(', ')+'</td>' +
+    '</tr>';
+  }).join('');
+  const netoTotalStyle = totalNeto<0 ? 'color:var(--clay);' : 'color:var(--sage);';
+  table.innerHTML =
+    '<tr><th>Mes</th><th class="mono">Capital</th><th class="mono">Interés</th><th class="mono">Gastos</th><th class="mono">Total a pagar</th><th class="mono">Ingreso</th><th class="mono">Neto</th><th>Bancos</th></tr>' +
+    body +
+    '<tr class="total-row"><td>Total</td><td class="mono">'+money(totalCapital)+'</td><td class="mono">'+money(totalInteres)+'</td><td class="mono">'+money(totalGastos)+'</td><td class="mono">'+money(totalTotal)+'</td><td class="mono">'+money(totalIngreso)+'</td><td class="mono" style="'+netoTotalStyle+'">'+money(totalNeto)+'</td><td></td></tr>';
+}
+
+/* ---------- ingresos mensuales ---------- */
+function openIncomeModal(key){
+  document.getElementById('inc-month').value = key;
+  document.getElementById('income-modal-sub').textContent = 'Mes: ' + monthLabel(key);
+  document.getElementById('inc-monto').value = incomes[key] || '';
+  document.getElementById('income-overlay').classList.add('open');
+}
+function closeIncomeModal(){
+  document.getElementById('income-overlay').classList.remove('open');
+  document.getElementById('income-form').reset();
+}
+function saveIncome(e){
+  e.preventDefault();
+  const key = document.getElementById('inc-month').value;
+  const monto = parseFloat(document.getElementById('inc-monto').value);
+  if(isNaN(monto) || monto<0){
+    appAlert('Ingresá un monto de ingreso válido (solo números).');
+    return false;
+  }
+  incomes[key] = monto;
+  persistIncomes();
+  closeIncomeModal();
+  renderMonthTab();
+  return false;
+}
+
+/* ---------- estadísticas ---------- */
+function renderStatsTab(){
+  const banks = byBank();
+  const months = byMonth();
+  const g = globalStats();
+  const wrap = document.getElementById('stats-content');
+
+  const montoOriginalTotal = loans.reduce(function(a,l){ return a + (l.montoOriginal||0); }, 0);
+  const costoFinancieroPct = montoOriginalTotal>0 ? (g.costoFinancieroTotal / montoOriginalTotal * 100) : 0;
+
+  let html = '';
+
+  html += '<div class="stat-grid">' +
+    '<div class="stat"><div class="stat-label">Costo financiero total</div><div class="stat-value">'+money(g.costoFinancieroTotal)+'</div><div class="stat-sub">Interés + gastos administrativos/bancarios</div></div>' +
+    '<div class="stat"><div class="stat-label">Interés puro</div><div class="stat-value">'+money(g.interesTotal)+'</div><div class="stat-sub">Solo el interés financiero, sin gastos</div></div>' +
+    '<div class="stat"><div class="stat-label">Gastos admin. / bancarios</div><div class="stat-value">'+money(g.gastosTotal)+'</div><div class="stat-sub">Impuestos, seguros y comisiones</div></div>' +
+    '<div class="stat"><div class="stat-label">Costo financiero relativo</div><div class="stat-value">'+costoFinancieroPct.toFixed(1)+'%</div><div class="stat-sub">Costo total sobre el monto original prestado</div></div>' +
+    '<div class="stat"><div class="stat-label">Deuda pendiente total</div><div class="stat-value">'+money(g.saldoPendienteTotal)+'</div><div class="stat-sub">Capital que todavía falta pagar</div></div>' +
+  '</div>';
+
+  // Gráfico: saldo pendiente por banco
+  const maxSaldo = Math.max.apply(null, banks.map(function(b){ return b.saldoPendiente; }).concat([1]));
+  html += '<div class="chart-card"><div class="chart-title">Deuda pendiente por banco</div>';
+  if(banks.length===0){
+    html += '<div class="empty" style="padding:20px 0;">Todavía no hay préstamos cargados.</div>';
+  }else{
+    banks.forEach(function(b){
+      const pct = Math.max(2, Math.round(b.saldoPendiente/maxSaldo*100));
+      html += '<div class="bar-row">' +
+        '<div class="bank-name">'+escapeHtml(b.banco)+'</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;"></div></div>' +
+        '<div class="bar-value">'+money(b.saldoPendiente)+'</div>' +
+      '</div>';
+    });
+  }
+  html += '</div>';
+
+  // Gráfico: capital vs interés por mes (próximos 12 meses con cuotas pendientes)
+  const monthsShown = months.slice(0,12);
+  const maxTotal = Math.max.apply(null, monthsShown.map(function(m){ return m.total; }).concat([1]));
+  html += '<div class="chart-card"><div class="chart-title">Capital, interés y gastos por mes</div>' +
+    '<div class="legend"><span><i style="background:var(--brass);"></i>Capital</span><span><i style="background:var(--clay);"></i>Interés</span><span><i style="background:var(--amber);"></i>Gastos admin.</span></div>';
+  if(monthsShown.length===0){
+    html += '<div class="empty" style="padding:20px 0;">No hay cuotas pendientes para graficar.</div>';
+  }else{
+    monthsShown.forEach(function(m){
+      const capPct = (m.capital/maxTotal*100);
+      const intPct = (m.interes/maxTotal*100);
+      const gasPct = (m.gastos/maxTotal*100);
+      html += '<div class="stacked-row">' +
+        '<div>'+monthLabel(m.key)+'</div>' +
+        '<div class="stacked-track"><div class="stacked-capital" style="width:'+capPct+'%;"></div><div class="stacked-interes" style="width:'+intPct+'%;"></div><div class="stacked-gastos" style="width:'+gasPct+'%;"></div></div>' +
+        '<div class="bar-value mono">'+money(m.total)+'</div>' +
+      '</div>';
+    });
+  }
+  html += '</div>';
+
+  // Ranking: costo financiero relativo por banco (qué banco sale más caro en relación a lo prestado)
+  const montoPorBanco = {};
+  loans.forEach(function(l){ montoPorBanco[l.banco] = (montoPorBanco[l.banco]||0) + (l.montoOriginal||0); });
+  const ranking = banks.map(function(b){
+    const montoB = montoPorBanco[b.banco] || 0;
+    const pct = montoB>0 ? (b.interesTotal + b.gastosTotal) / montoB * 100 : 0;
+    return { banco: b.banco, pct: pct };
+  }).sort(function(a,b){ return b.pct - a.pct; });
+  const maxPct = Math.max.apply(null, ranking.map(function(r){ return r.pct; }).concat([1]));
+  html += '<div class="chart-card"><div class="chart-title">Costo financiero relativo por banco (interés + gastos sobre lo prestado)</div>';
+  if(ranking.length===0){
+    html += '<div class="empty" style="padding:20px 0;">Todavía no hay préstamos cargados.</div>';
+  }else{
+    ranking.forEach(function(r){
+      const pctBar = Math.max(2, Math.round(r.pct/maxPct*100));
+      html += '<div class="bar-row">' +
+        '<div class="bank-name">'+escapeHtml(r.banco)+'</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:'+pctBar+'%;"></div></div>' +
+        '<div class="bar-value">'+r.pct.toFixed(1)+'%</div>' +
+      '</div>';
+    });
+  }
+  html += '<p class="modal-sub" style="margin-top:10px;margin-bottom:0;">Más alto = ese banco te está costando relativamente más caro por guaraní prestado.</p></div>';
+
+  // Proyección de flujo de caja a futuro (próximos 6 meses)
+  const proyeccion = proyeccionFlujoCaja(6);
+  html += '<div class="chart-card"><div class="chart-title">Proyección de flujo de caja (próximos 6 meses)</div>' +
+    '<div class="legend"><span><i style="background:var(--sage);"></i>Neto positivo</span><span><i style="background:var(--clay);"></i>Neto negativo</span></div>';
+  const maxAbs = Math.max.apply(null, proyeccion.map(function(p){ return Math.abs(p.neto); }).concat([1]));
+  proyeccion.forEach(function(p){
+    const pct = Math.max(2, Math.round(Math.abs(p.neto)/maxAbs*100));
+    const color = p.neto<0 ? 'var(--clay)' : 'var(--sage)';
+    html += '<div class="bar-row">' +
+      '<div class="bank-name">'+monthLabel(p.key)+'</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+color+';"></div></div>' +
+      '<div class="bar-value" style="color:'+color+';">'+money(p.neto)+'</div>' +
+    '</div>';
+  });
+  html += '<p class="modal-sub" style="margin-top:10px;margin-bottom:0;">Ingreso mensual cargado en "Por mes" menos préstamos, cheques y otros pagos pendientes de cada mes. Saldo acumulado al final del período: <strong style="color:var(--paper);">'+money(proyeccion.reduce(function(a,p){return a+p.neto;},0))+'</strong></p></div>';
+
+  wrap.innerHTML = html;
+}
+function proyeccionFlujoCaja(mesesAdelante){
+  const map = {};
+  allObligaciones().forEach(function(it){
+    const key = (it.fechaEfectiva||it.fecha).slice(0,7);
+    map[key] = (map[key]||0) + it.monto;
+  });
+  const result = [];
+  const base = new Date();
+  base.setDate(1);
+  for(let i=0;i<mesesAdelante;i++){
+    const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const totalObligaciones = map[key] || 0;
+    const ingreso = incomes[key] || 0;
+    result.push({ key: key, ingreso: ingreso, obligaciones: totalObligaciones, neto: ingreso - totalObligaciones });
+  }
+  return result;
+}
+
+/* ---------- flujo de caja diario ---------- */
+function todayISOStr(){ const d=new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
+let flujoCalMonth = todayISOStr().slice(0,7); // 'YYYY-MM'
+let flujoSelectedDate = todayISOStr();
+
+function changeCalMonth(delta){
+  const parts = flujoCalMonth.split('-');
+  const d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1+delta, 1);
+  flujoCalMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderFlujoTab();
+}
+function goToTodayCal(){
+  flujoCalMonth = todayISOStr().slice(0,7);
+  flujoSelectedDate = todayISOStr();
+  renderFlujoTab();
+}
+function setFlujoDate(fecha){
+  flujoSelectedDate = fecha;
+  flujoCalMonth = fecha.slice(0,7);
+  renderFlujoTab();
+}
+function renderCalendar(dayTotalsMap){
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const DOW = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const parts = flujoCalMonth.split('-');
+  const year = parseInt(parts[0],10), monthIdx = parseInt(parts[1],10)-1;
+  document.getElementById('cal-month-label').textContent = MESES[monthIdx]+' '+year;
+
+  const firstDay = new Date(year, monthIdx, 1);
+  const daysInMonth = new Date(year, monthIdx+1, 0).getDate();
+  let startOffset = firstDay.getDay()-1; // lunes=0
+  if(startOffset<0) startOffset = 6;
+
+  const today = todayISOStr();
+  let html = DOW.map(function(d){ return '<div class="cal-dow">'+d+'</div>'; }).join('');
+  for(let i=0;i<startOffset;i++) html += '<div class="cal-day empty"></div>';
+  for(let day=1; day<=daysInMonth; day++){
+    const iso = year+'-'+String(monthIdx+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    const dayData = dayTotalsMap[iso];
+    const weekend = isWeekendISO(iso);
+    const holiday = isHolidayISO(iso);
+    let cls = 'cal-day';
+    if(weekend) cls += ' weekend';
+    if(holiday) cls += ' holiday';
+    if(dayData) cls += ' has-obligations';
+    if(iso===today) cls += ' is-today';
+    if(iso===flujoSelectedDate) cls += ' is-selected';
+    html += '<div class="'+cls+'" onclick="setFlujoDate(\''+iso+'\')">' +
+      '<div class="cal-num">'+day+'</div>' +
+      (holiday ? '<div class="cal-holiday-tag">Feriado</div>' : '') +
+      (dayData ? '<div class="cal-amt">'+money(dayData.total)+'</div>' : '') +
+    '</div>';
+  }
+  document.getElementById('flujo-calendar').innerHTML = html;
+}
+function renderVencidosNoPagados(){
+  const today = todayISOStr();
+  const vencidos = allObligaciones()
+    .filter(function(it){ return (it.fuente==='Cheque' || it.fuente==='ChequeGrupo') && it.fechaEfectiva < today; })
+    .sort(function(a,b){ return a.fechaEfectiva.localeCompare(b.fechaEfectiva); });
+
+  const table = document.getElementById('flujo-vencidos-table');
+  if(vencidos.length===0){
+    table.innerHTML = '<tr><td class="empty" style="border:none;">No hay cheques atrasados — todo lo que venció ya fue marcado como pagado.</td></tr>';
+    return;
+  }
+  let total = 0;
+  const body = vencidos.map(function(it){
+    total += it.monto;
+    const diasAtraso = Math.round((new Date(today+'T00:00:00') - new Date(it.fechaEfectiva+'T00:00:00')) / 86400000);
+    return '<tr>' +
+      '<td>'+escapeHtml(it.fuenteLabel)+'</td>' +
+      '<td>'+escapeHtml(it.entidad)+'</td>' +
+      '<td>'+escapeHtml(it.detalle)+'</td>' +
+      '<td class="mono">'+formatDate(it.fechaEfectiva)+'</td>' +
+      '<td><span class="badge badge-late">'+diasAtraso+' día'+(diasAtraso===1?'':'s')+'</span></td>' +
+      '<td class="mono">'+money(it.monto)+'</td>' +
+      '<td style="text-align:right;"><button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
+    '</tr>';
+  }).join('');
+  table.innerHTML =
+    '<tr><th>Fuente</th><th>Entidad</th><th>Detalle</th><th class="mono">Vencimiento</th><th>Atraso</th><th class="mono">Monto</th><th style="text-align:right;">Acciones</th></tr>' +
+    body +
+    '<tr class="total-row"><td colspan="5">Total no pagado</td><td class="mono">'+money(total)+'</td><td></td></tr>';
+}
+function renderFlujoTab(){
+  const days = obligacionesByDay();
+  const dayTotalsMap = {};
+  days.forEach(function(d){ dayTotalsMap[d.fecha] = d; });
+
+  renderVencidosNoPagados();
+  renderCalendar(dayTotalsMap);
+
+  const selected = flujoSelectedDate;
+  const day = dayTotalsMap[selected];
+
+  document.getElementById('flujo-day-label').textContent = formatDate(selected) + (isWeekendISO(selected)?' (fin de semana)':'') + (isHolidayISO(selected)?' (feriado)':'');
+
+  document.getElementById('flujo-summary').innerHTML =
+    '<div class="stat"><div class="stat-label">Total a pagar el '+formatDate(selected)+'</div><div class="stat-value">'+money(day?day.total:0)+'</div><div class="stat-sub">Préstamos + cheques + otros pagos</div></div>' +
+    '<div class="stat"><div class="stat-label">Cuotas de préstamos</div><div class="stat-value">'+money(day?day.prestamos:0)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Cheques a proveedores</div><div class="stat-value">'+money(day?day.cheques:0)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Cheques a empresas del grupo</div><div class="stat-value">'+money(day?day.chequesGrupo:0)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Otros pagos</div><div class="stat-value">'+money(day?day.otros:0)+'</div></div>';
+
+  const dayTable = document.getElementById('flujo-day-table');
+  if(!day || day.items.length===0){
+    dayTable.innerHTML = '<tr><td class="empty" style="border:none;">No hay obligaciones pendientes para esta fecha.</td></tr>';
+  }else{
+    const items = day.items.slice().sort(function(a,b){ return b.monto-a.monto; });
+    dayTable.innerHTML = '<tr><th>Fuente</th><th>Entidad</th><th>Detalle</th><th class="mono">Vencimiento original</th><th class="mono">Monto</th><th style="text-align:right;">Acciones</th></tr>' +
+      items.map(function(it){
+        const movido = it.fechaEfectiva!==it.fecha;
+        return '<tr>' +
+          '<td>'+escapeHtml(it.fuenteLabel)+'</td>' +
+          '<td>'+escapeHtml(it.entidad)+'</td>' +
+          '<td>'+escapeHtml(it.detalle)+'</td>' +
+          '<td class="mono">'+(movido ? formatDate(it.fecha)+' →' : '—')+'</td>' +
+          '<td class="mono">'+money(it.monto)+'</td>' +
+          '<td style="text-align:right;"><button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
+        '</tr>';
+      }).join('') +
+      '<tr class="total-row"><td colspan="4">Total del día</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
+  }
+}
+
+/* ---------- pagos y cheques ---------- */
+function renderPagosTab(){
+  const wrap = document.getElementById('pago-cards');
+  if(pagos.length===0){
+    wrap.innerHTML = '<div class="empty"><b>Todavía no cargaste cheques ni otros pagos</b>Usá "+ Nuevo pago" para registrar cheques a proveedores u otras obligaciones (alquiler, sueldos, servicios, impuestos).</div>';
+    return;
+  }
+  const posiblesCheques = pagos.filter(function(p){ return p.tipo==='Otro' && /cheque/i.test(p.concepto||''); });
+  const warningHtml = posiblesCheques.length>0
+    ? '<div class="banner" style="background:var(--amber-dim);border-color:var(--amber);margin-bottom:14px;">' +
+        '<div class="banner-title" style="color:#e8bd82;">⚠ '+posiblesCheques.length+' pago(s) cargado(s) como "Otro pago" mencionan un cheque en el concepto — probablemente deberían ser "Cheque a proveedor" o "Cheque a empresa del grupo".</div>' +
+        '<button class="btn-ghost btn-small" style="border-color:var(--amber);color:#e8bd82;" onclick="reclasificarSospechosos()">Reclasificar todos como cheque a proveedor</button>' +
+      '</div>'
+    : '';
+  const sorted = pagos.slice().sort(function(a,b){ return daysUntil(a.fecha)-daysUntil(b.fecha); });
+  wrap.innerHTML = warningHtml + sorted.map(function(p){
+    const d = daysUntil(p.fecha);
+    const sospechoso = p.tipo==='Otro' && /cheque/i.test(p.concepto||'');
+    let badge = '<span class="pill">Pagado</span>';
+    if(p.estado==='Pendiente'){
+      if(d<0) badge = '<span class="badge badge-late">Vencido</span>';
+      else if(d<=7) badge = '<span class="badge badge-warn">Por vencer</span>';
+      else badge = '<span class="badge badge-ok">Al día</span>';
+    }
+    return '<div class="loan-card">' +
+      '<div><div class="lc-title">'+escapeHtml(p.entidad)+'</div><div class="lc-sub">'+escapeHtml(pagoTipoLabel(p.tipo))+(p.concepto?' · '+escapeHtml(p.concepto):'')+(sospechoso?' · <span style="color:#e8bd82;">¿es un cheque?</span>':'')+'</div></div>' +
+      '<div><div class="lc-label">Monto</div><div class="lc-value">'+money(p.monto)+'</div></div>' +
+      '<div><div class="lc-label">Fecha de pago</div><div class="lc-value">'+formatDate(p.fecha)+'</div></div>' +
+      '<div><div style="margin-top:5px;">'+badge+'</div></div>' +
+      '<div class="row-actions">' +
+        (sospechoso ? '<button class="icon-btn" title="Reclasificar como cheque a proveedor" onclick="quickReclasificar(\''+p.id+'\')">🔄</button>' : '') +
+        (p.estado==='Pendiente' ? '<button class="icon-btn" title="Registrar pago parcial" onclick="openParcialModal(\''+p.id+'\')">½</button>' : '') +
+        '<button class="icon-btn" title="'+(p.estado==='Pendiente'?'Marcar pagado':'Marcar pendiente')+'" onclick="togglePagoEstado(\''+p.id+'\')">'+(p.estado==='Pendiente'?'✓':'↺')+'</button>' +
+        '<button class="icon-btn" title="Editar" onclick="editPago(\''+p.id+'\')">✎</button>' +
+        '<button class="icon-btn danger" title="Eliminar" onclick="deletePago(\''+p.id+'\')">✕</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+let parcialPagoId = null;
+function openParcialModal(id){
+  parcialPagoId = id;
+  const p = pagos.find(function(p){ return p.id===id; });
+  if(!p) return;
+  document.getElementById('parcial-modal-sub').textContent = escapeHtml(p.entidad)+' — total del cheque: '+money(p.monto);
+  document.getElementById('parcial-monto').value = '';
+  document.getElementById('parcial-overlay').classList.add('open');
+}
+function closeParcialModal(){
+  document.getElementById('parcial-overlay').classList.remove('open');
+  parcialPagoId = null;
+}
+function confirmarPagoParcial(){
+  const p = pagos.find(function(p){ return p.id===parcialPagoId; });
+  if(!p) return;
+  const montoPagado = parseFloat(document.getElementById('parcial-monto').value);
+  if(isNaN(montoPagado) || montoPagado<=0){
+    appAlert('Ingresá un monto válido mayor a cero.');
+    return;
+  }
+  if(montoPagado>=p.monto){
+    p.estado = 'Pagada';
+    persistPagos();
+    closeParcialModal();
+    renderAll();
+    return;
+  }
+  const pagadoAhora = {
+    id: uid('p'), tipo: p.tipo, entidad: p.entidad,
+    concepto: (p.concepto||'')+' (pago parcial)',
+    monto: montoPagado, fecha: p.fecha, estado: 'Pagada'
+  };
+  p.monto = Math.round((p.monto - montoPagado)*100)/100;
+  p.concepto = (p.concepto||'')+' (saldo restante de pago parcial)';
+  pagos.push(pagadoAhora);
+  persistPagos();
+  closeParcialModal();
+  renderAll();
+  appAlert('Se registraron Gs. '+money(montoPagado).replace('Gs. ','')+' como pagados. Queda un saldo pendiente de '+money(p.monto)+' en el mismo cheque.');
+}
+function quickReclasificar(id){
+  const p = pagos.find(function(p){ return p.id===id; });
+  if(!p) return;
+  p.tipo = 'Cheque';
+  persistPagos();
+  renderAll();
+}
+function reclasificarSospechosos(){
+  let n = 0;
+  pagos.forEach(function(p){
+    if(p.tipo==='Otro' && /cheque/i.test(p.concepto||'')){ p.tipo='Cheque'; n++; }
+  });
+  persistPagos();
+  renderAll();
+  appAlert(n+' pago(s) reclasificado(s) como "Cheque a proveedor". Revisá si alguno en realidad era de una empresa del grupo y corregilo desde el lápiz (✎).');
+}
+function openPagoModal(pago){
+  document.getElementById('pago-modal-title').textContent = pago ? 'Editar pago' : 'Nuevo pago';
+  document.getElementById('p-id').value = pago ? pago.id : '';
+  document.getElementById('p-tipo').value = pago ? pago.tipo : 'Cheque';
+  document.getElementById('p-entidad').value = pago ? pago.entidad : '';
+  document.getElementById('p-concepto').value = pago ? pago.concepto : '';
+  document.getElementById('p-monto').value = pago ? pago.monto : '';
+  document.getElementById('p-fecha').value = pago ? pago.fecha : '';
+  document.getElementById('p-estado').value = pago ? pago.estado : 'Pendiente';
+  document.getElementById('pago-overlay').classList.add('open');
+}
+function closePagoModal(){
+  document.getElementById('pago-overlay').classList.remove('open');
+  document.getElementById('pago-form').reset();
+}
+function savePago(e){
+  e.preventDefault();
+  const entidad = document.getElementById('p-entidad').value.trim();
+  const monto = parseFloat(document.getElementById('p-monto').value);
+  const fecha = document.getElementById('p-fecha').value;
+  const faltantes = [];
+  if(!entidad) faltantes.push('Proveedor / beneficiario');
+  if(isNaN(monto) || monto<=0) faltantes.push('Monto (revisá que no tenga puntos ni comas)');
+  if(!fecha) faltantes.push('Fecha de pago');
+  if(faltantes.length>0){
+    appAlert('Faltan completar estos campos antes de guardar:\n\n- ' + faltantes.join('\n- '));
+    return false;
+  }
+  const id = document.getElementById('p-id').value || uid('p');
+  const data = {
+    id: id,
+    tipo: document.getElementById('p-tipo').value,
+    entidad: entidad,
+    concepto: document.getElementById('p-concepto').value.trim(),
+    monto: monto,
+    fecha: fecha,
+    estado: document.getElementById('p-estado').value
+  };
+  const idx = pagos.findIndex(function(p){ return p.id===id; });
+  if(idx>=0) pagos[idx]=data; else pagos.push(data);
+  persistPagos();
+  closePagoModal();
+  renderAll();
+  return false;
+}
+function editPago(id){
+  const p = pagos.find(function(p){ return p.id===id; });
+  if(p) openPagoModal(p);
+}
+function deletePago(id){
+  appConfirm('¿Eliminar este pago del registro? Esta acción no se puede deshacer.', function(){
+    pagos = pagos.filter(function(p){ return p.id!==id; });
+    persistPagos();
+    renderAll();
+  });
+}
+function togglePagoEstado(id){
+  const p = pagos.find(function(p){ return p.id===id; });
+  if(!p) return;
+  p.estado = p.estado==='Pendiente' ? 'Pagada' : 'Pendiente';
+  persistPagos();
+  renderAll();
+}
+function removeDuplicatePagos(){
+  const seen = {};
+  const toRemove = [];
+  pagos.forEach(function(p){
+    const key = pagoDedupeKey(p);
+    if(seen[key]) toRemove.push(p.id);
+    else seen[key] = true;
+  });
+  if(toRemove.length===0){
+    appAlert('No se encontraron cheques o pagos duplicados (mismo tipo, entidad, monto, fecha y concepto).');
+    return;
+  }
+  appConfirm('Se encontraron '+toRemove.length+' cheque(s)/pago(s) duplicado(s) (misma entidad, monto, fecha y concepto). ¿Eliminarlos y dejar solo uno de cada uno?', function(){
+    pagos = pagos.filter(function(p){ return toRemove.indexOf(p.id)===-1; });
+    persistPagos();
+    renderAll();
+    appAlert(toRemove.length+' duplicado(s) eliminado(s).');
+  });
+}
+function clearAllPagos(){
+  if(pagos.length===0){
+    appAlert('No hay cheques ni pagos cargados todavía.');
+    return;
+  }
+  appConfirm('Esto va a eliminar los '+pagos.length+' cheque(s)/pago(s) cargados actualmente (no afecta a los préstamos). Esta acción no se puede deshacer. ¿Continuar?', function(){
+    pagos = [];
+    persistPagos();
+    renderAll();
+    appAlert('Se vaciaron todos los cheques y pagos. Ya podés importar el nuevo Excel.');
+  });
+}
+
+function renderAll(){
+  renderStats();
+  renderBanner();
+  renderBackupReminder();
+  renderActivePanel();
+}
+
+/* ---------- modal: préstamo ---------- */
+const SISTEMA_LABELS = {
+  Frances: 'Francés',
+  Aleman: 'Alemán',
+  SoloInteres: 'Solo interés',
+  BulletPeriodico: 'Bullet periódico',
+  Gracia: 'Con gracia de capital',
+  Variable: 'Variable / manual'
+};
+function toggleGraciaField(){
+  const sistema = document.getElementById('l-tipo').value;
+  document.getElementById('l-gracia-field').style.display = sistema==='Gracia' ? 'flex' : 'none';
+  document.getElementById('l-frecap-field').style.display = sistema==='BulletPeriodico' ? 'flex' : 'none';
+  const autogenBtn = document.getElementById('l-autogen-btn');
+  autogenBtn.style.display = sistema==='Variable' ? 'none' : 'inline-block';
+}
+/* ---------- lectura automática de proformas (imagen o PDF) ---------- */
+function triggerProformaUpload(){
+  if(typeof pdfjsLib==='undefined' || typeof Tesseract==='undefined'){
+    appAlert('No se pudieron cargar las librerías de lectura de documentos (revisá tu conexión a internet e intentá de nuevo).');
+    return;
+  }
+  document.getElementById('proforma-input').click();
+}
+function setProformaStatus(text){
+  const el = document.getElementById('proforma-status');
+  if(!text){ el.style.display = 'none'; return; }
+  el.textContent = text;
+  el.style.display = 'inline-block';
+}
+function rotateCanvas(sourceCanvas, degrees){
+  degrees = ((degrees % 360) + 360) % 360;
+  if(degrees===0) return sourceCanvas;
+  const rad = degrees * Math.PI/180;
+  const swap = (degrees===90 || degrees===270);
+  const out = document.createElement('canvas');
+  out.width = swap ? sourceCanvas.height : sourceCanvas.width;
+  out.height = swap ? sourceCanvas.width : sourceCanvas.height;
+  const ctx = out.getContext('2d');
+  ctx.save();
+  ctx.translate(out.width/2, out.height/2);
+  ctx.rotate(rad);
+  ctx.drawImage(sourceCanvas, -sourceCanvas.width/2, -sourceCanvas.height/2);
+  ctx.restore();
+  return out;
+}
+async function extractPdfText(file, rotation){
+  rotation = rotation||0;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  let fullText = '';
+  for(let i=1; i<=pdf.numPages; i++){
+    setProformaStatus('Leyendo página '+i+' de '+pdf.numPages+'…');
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += content.items.map(function(it){ return it.str; }).join(' ') + '\n';
+  }
+  if(fullText.trim().length>20) return fullText;
+
+  // El PDF no tiene texto real (es un escaneo/foto): se renderiza cada página como imagen
+  // (aplicando la rotación elegida) y se le aplica reconocimiento óptico (OCR).
+  let ocrText = '';
+  for(let i=1; i<=pdf.numPages; i++){
+    setProformaStatus('El PDF es un documento escaneado: aplicando reconocimiento óptico a la página '+i+' de '+pdf.numPages+' (puede tardar)…');
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({scale: 2.2});
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({canvasContext: ctx, viewport: viewport}).promise;
+    const rotated = rotateCanvas(canvas, rotation);
+    try{
+      const result = await Tesseract.recognize(rotated, 'spa');
+      ocrText += result.data.text + '\n';
+    }catch(ocrErr){
+      throw new Error('OCR_BLOCKED');
+    }
+  }
+  return ocrText;
+}
+async function extractImageText(file, rotation){
+  setProformaStatus('Reconociendo texto de la imagen (puede tardar unos segundos)…');
+  try{
+    let source = file;
+    if(rotation){
+      const img = await loadImageFromFile(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      canvas.getContext('2d').drawImage(img,0,0);
+      source = rotateCanvas(canvas, rotation);
+    }
+    const result = await Tesseract.recognize(source, 'spa');
+    return result.data.text;
+  }catch(ocrErr){
+    throw new Error('OCR_BLOCKED');
+  }
+}
+function loadImageFromFile(file){
+  return new Promise(function(resolve, reject){
+    const img = new Image();
+    img.onload = function(){ resolve(img); };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+const PROFORMA_BANCOS = ['continental','itau','itaú','gnb','sudameris','basa','familiar','regional','atlas','vision','visión','ueno','zeta','bnf','rio','río','amambay','bancop','financiera'];
+/* Detecta y parsea reportes de "Plan de Pagos" (cronograma bancario completo, tipo Sudameris),
+   extrayendo cada cuota real (fecha, capital, interés+impuestos+seguros+comisiones, y si ya fue pagada). */
+function cleanNumberUS(val){
+  let s = String(val==null?'':val).trim();
+  s = s.replace(/,/g,'');
+  return Math.round(parseFloat(s)||0);
+}
+function parsePlanDePagosReport(text){
+  const norm = text.replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+
+  // Orden real de columnas tal como lo extrae el navegador de este tipo de reporte:
+  // Cuota | F/Pago | Capital | Intereses | Impuestos | Total de Cuota | Plazo | F/Hasta | F/Desde | Seguros | Comisiones | Saldo Capital
+  const rowRegex = /(\d{1,3})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d{1,3})\s+\d{2}\/\d{2}\/\d{4}\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
+  const pagoRegex = /PAGO:/gi;
+
+  const rows = [];
+  let m;
+  while((m = rowRegex.exec(norm))){
+    rows.push({
+      index: m.index, end: m.index + m[0].length,
+      numero: parseInt(m[1],10), fecha: toISODate(m[2], false),
+      capital: cleanNumberUS(m[3]), interes: cleanNumberUS(m[4]), impuestos: cleanNumberUS(m[5]),
+      fechaDesde: toISODate(m[8], false),
+      seguros: cleanNumberUS(m[9]), comisiones: cleanNumberUS(m[10]), saldo: cleanNumberUS(m[11])
+    });
+  }
+  // Se exige al menos 2 filas coincidentes para confirmar que es una tabla de cronograma real
+  // (evita falsos positivos con documentos que no son un plan de pagos)
+  if(rows.length<2) return null;
+
+  const pagoPositions = [];
+  while((m = pagoRegex.exec(norm))){ pagoPositions.push(m.index); }
+
+  const cuotas = rows.map(function(r, i){
+    const nextStart = (i+1 < rows.length) ? rows[i+1].index : Infinity;
+    const isPaid = pagoPositions.some(function(p){ return p > r.end && p < nextStart; });
+    return {
+      id: uid('c'), numero: r.numero, fecha: r.fecha,
+      capital: Math.round(r.capital), interes: Math.round(r.interes),
+      gastos: Math.round(r.impuestos + r.seguros + r.comisiones),
+      estado: isPaid ? 'Pagada' : 'Pendiente'
+    };
+  });
+
+  const header = { montoOriginal: Math.round(rows[0].saldo), fechaInicio: rows[0].fechaDesde || cuotas[0].fecha };
+
+  for(let i=0;i<PROFORMA_BANCOS.length;i++){
+    if(lower.indexOf(PROFORMA_BANCOS[i])!==-1){
+      header.banco = PROFORMA_BANCOS[i].charAt(0).toUpperCase()+PROFORMA_BANCOS[i].slice(1)+' Bank';
+      break;
+    }
+  }
+  let mm = norm.match(/Operaci[oó]n\s*\/\s*Sub-Op:?\s*(\d{6,8})\s*(\d{3,5})\s*(\d{1,3}\.\d{3,6})\s*(\d{1,4})\s*(\d{5,9})/i);
+  if(mm){
+    header.tasaAnual = parseFloat(mm[3]);
+    header.numeroOperacion = mm[5];
+  }else{
+    mm = norm.match(/(\d{6,8})\s*Operaci[oó]n\s*\/\s*Sub-Op:?\s*(\d{3,5})\s*(\d{1,3}\.\d{3,6})\s*(\d{1,4})/i);
+    if(mm) header.tasaAnual = parseFloat(mm[3]);
+    else{
+      mm = norm.match(/tasa\s*:?\s*([\d]{1,3}\.\d{3,6})/i);
+      if(mm) header.tasaAnual = parseFloat(mm[1]);
+    }
+  }
+  if(!header.numeroOperacion){
+    mm = norm.match(/[A-ZÁÉÍÓÚÑ]{2,}(?:\s+[A-ZÁÉÍÓÚÑ]{2,}){1,4}\s+(\d{5,9})\b/);
+    if(mm) header.numeroOperacion = mm[1];
+  }
+
+  return { header: header, cuotas: cuotas };
+}
+/* Detecta y parsea el formato "Liquidación de Préstamo" de Banco Atlas */
+/* Detecta y parsea el formato "Extracto de Préstamos" de Banco Continental.
+   La tabla tiene columnas que aparecen o desaparecen según la fila (capital solo
+   se informa en las cuotas donde efectivamente se amortiza), así que se interpreta
+   por magnitud: un valor grande (capital) suele venir antes que el interés. */
+function cleanNumberPY(val){
+  return parseInt(String(val==null?'':val).replace(/[^\d\-]/g,''), 10) || 0;
+}
+function cleanNumberLoose(val){
+  let s = String(val==null?'':val).trim();
+  s = s.replace(/[.,]00$/,'');
+  s = s.replace(/[^\d]/g,'');
+  return parseInt(s,10)||0;
+}
+function addDaysISO(dateISO, days){
+  const d = new Date(dateISO + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+/* Detecta y parsea el formato "Propuesta de Producto" de Sudameris (similar al Plan de
+   Pagos pero con las columnas en el mismo orden que el encabezado: Cuota F/Vto Plazo
+   Capital Interés Impuestos Seguros Comisiones) */
+/* Detecta y parsea el formato "Plan de Pagos Inicial" (Cuota, Vencimiento, Cargos,
+   Seguros, Sub Total, Capital, Interes, Días, Monto) */
+/* Detecta y parsea el formato de Zeta Banco (Cuota, Plazo en Días, Vcto., Monto Capital,
+   Monto Interés, IVA, Documento/Total). El número de cuota a veces se lee mal en el OCR
+   (dígitos faltantes), así que se usa el orden de aparición en vez de ese número. */
+function parseZetaBanco(text){
+  let norm = text.replace(/[|*]/g,' ').replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+  if(lower.indexOf('zetabanco')===-1 && lower.indexOf('zeta banco')===-1) return null;
+
+  const rowRegex = /\S+\s+(\d{1,3})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,\-]+)\s+([\d.,\-]+)\s+([\d.,\-]+)\s+([\d.,\-]+)/g;
+  let m;
+  const rows = [];
+  while((m = rowRegex.exec(norm))){
+    rows.push({
+      fecha: toISODate(m[2], false),
+      capital: cleanNumberLoose(m[3]), interes: cleanNumberLoose(m[4]), gastos: cleanNumberLoose(m[5])
+    });
+  }
+  if(rows.length<2) return null;
+
+  const cuotas = rows.map(function(r, i){
+    return { id: uid('c'), numero: i+1, fecha: r.fecha, capital: r.capital, interes: r.interes, gastos: r.gastos, estado: 'Pendiente' };
+  });
+
+  const header = { banco: 'Zeta' };
+  let mm = norm.match(/Fecha Inicio\s+(\d{2}\/\d{2}\/\d{4})/i);
+  if(mm) header.fechaInicio = toISODate(mm[1], false);
+  mm = norm.match(/Nro\.?\s*Solicitud\s+(\d+)/i);
+  if(mm) header.numeroOperacion = mm[1];
+  mm = norm.match(/\bCapital:\s*([\d.,]+)/i);
+  if(mm) header.montoOriginal = cleanNumberLoose(mm[1]);
+  mm = norm.match(/Anual\s*Aplicada:\s*([\d,]+)\s*%/i);
+  if(mm) header.tasaAnual = parseFloat(mm[1].replace(',','.'));
+
+  return { header: header, cuotas: cuotas };
+}
+function parsePlanDePagosInicial(text){
+  const norm = text.replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+  if(lower.indexOf('plan de pagos inicial')===-1) return null;
+
+  const rowRegex = /(\d{1,3})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d{1,3})\s+([\d.]+)/g;
+  let m;
+  const rows = [];
+  while((m = rowRegex.exec(norm))){
+    rows.push({
+      numero: parseInt(m[1],10), fecha: toISODate(m[2], false),
+      cargos: cleanNumberPY(m[3]), seguros: cleanNumberPY(m[4]),
+      capital: cleanNumberPY(m[6]), interes: cleanNumberPY(m[7])
+    });
+  }
+  if(rows.length<2) return null;
+
+  const cuotas = rows.map(function(r){
+    return { id: uid('c'), numero: r.numero, fecha: r.fecha, capital: r.capital, interes: r.interes, gastos: r.cargos+r.seguros, estado: 'Pendiente' };
+  });
+
+  const header = { banco: 'GNB' };
+  let mm = norm.match(/(\d{2}\/\d{2}\/\d{4})/);
+  if(mm) header.fechaInicio = toISODate(mm[1], false);
+  mm = norm.match(/Total\s*Cr[eé]dito:\s*([\d.]+)/i);
+  if(mm) header.montoOriginal = cleanNumberPY(mm[1]);
+  mm = norm.match(/\b(\d{10})\b/);
+  if(mm) header.numeroOperacion = mm[1];
+  const pcts = norm.match(/(\d{1,2}[.,]\d{1,2})\s*%/g);
+  if(pcts && pcts.length>0){
+    // Cuando aparecen T.A.N., T.A.E. y Tasa, se usa la última (la etiquetada "Tasa"),
+    // que es la que efectivamente se aplicó para calcular las cuotas.
+    const chosen = pcts.length>=3 ? pcts[2] : pcts[0];
+    header.tasaAnual = parseFloat(chosen.replace('%','').trim().replace(',','.'));
+  }
+
+  return { header: header, cuotas: cuotas };
+}
+function parseSudamerisPropuesta(text){
+  let norm = text.replace(/[|'—]/g,' ').replace(/\s-\s/g,' ').replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+  if(lower.indexOf('sudameris')===-1) return null;
+
+  const rowRegex = /(\d{1,3})\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{1,3})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/g;
+  let m;
+  const rows = [];
+  while((m = rowRegex.exec(norm))){
+    rows.push({
+      numero: parseInt(m[1],10), fecha: toISODate(m[2], false), plazoDias: parseInt(m[3],10),
+      capital: cleanNumberLoose(m[4]), interes: cleanNumberLoose(m[5]),
+      gastos: cleanNumberLoose(m[6]) + cleanNumberLoose(m[7]) + cleanNumberLoose(m[8])
+    });
+  }
+  if(rows.length<2) return null;
+
+  const cuotas = rows.map(function(r){
+    return { id: uid('c'), numero: r.numero, fecha: r.fecha, capital: r.capital, interes: r.interes, gastos: r.gastos, estado: 'Pendiente' };
+  });
+
+  const header = { banco: 'Sudameris Bank' };
+  header.fechaInicio = addDaysISO(rows[0].fecha, -rows[0].plazoDias);
+  let mm = norm.match(/Capital a financiar:\s*([\d.,]+)/i);
+  if(mm) header.montoOriginal = cleanNumberLoose(mm[1]);
+  mm = norm.match(/Tasa:\s*([\d]{1,3}\.\d{3,6})/i);
+  if(mm) header.tasaAnual = parseFloat(mm[1]);
+  mm = norm.match(/Operaci[oó]n\/Sub-Op:?\s*(\d{5,9})/i);
+  if(mm) header.numeroOperacion = mm[1];
+
+  return { header: header, cuotas: cuotas };
+}
+function parseContinentalExtracto(text){
+  const norm = text.replace(/[—+']/g,' ').replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+  if(lower.indexOf('extracto de prestamos')===-1 && lower.indexOf('continental')===-1) return null;
+
+  const anchorRegex = /(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+0*(\d{1,3})\b/g;
+  const anchors = [];
+  let m;
+  while((m = anchorRegex.exec(norm))){
+    anchors.push({index:m.index, end:m.index+m[0].length, fechaPago:m[2], numero:parseInt(m[3],10)});
+  }
+  if(anchors.length<2) return null;
+
+  const cuotas = anchors.map(function(a, i){
+    const nextStart = (i+1<anchors.length) ? anchors[i+1].index : norm.length;
+    const chunk = norm.slice(a.end, nextStart);
+    const tokens = chunk.trim().split(/\s+/).filter(Boolean);
+    const montos = tokens.filter(function(t){ return /^\d{1,3}(\.\d{3})+$/.test(t); }).map(cleanNumberPY);
+    let capital=0, interes=0;
+    if(montos.length>0 && montos[0]>=10000000){
+      capital = montos[0];
+      interes = montos.length>1 ? montos[1] : 0;
+    }else if(montos.length>0){
+      interes = montos[0];
+    }
+    return { id: uid('c'), numero: a.numero, fecha: toISODate(a.fechaPago, false), capital: capital, interes: interes, gastos: 0, estado: 'Pendiente' };
+  });
+
+  const header = { banco: 'Continental' };
+  let mm = norm.match(/Operaci[oó]n\s+(\d{6,15})/i);
+  if(mm) header.numeroOperacion = mm[1];
+  mm = norm.match(/(?<!Saldo )Capital\s+([\d.]+)\b/i) || norm.match(/\bCapital\s+([\d.]+)\b/i);
+  if(mm) header.montoOriginal = cleanNumberPY(mm[1]);
+  mm = norm.match(/\bTasa\s+(\d{1,3}(?:\.\d+)?)\b/i);
+  if(mm) header.tasaAnual = parseFloat(mm[1]);
+
+  return { header: header, cuotas: cuotas };
+}
+function parseAtlasLiquidacion(text){
+  const norm = text.replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+  if(lower.indexOf('atlas')===-1) return null;
+
+  // Filas: N° Vencimiento Capital Interés IVA Total Días
+  const rowRegex = /(\d{1,2})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d{1,3})\b/g;
+  const rows = [];
+  let m;
+  while((m = rowRegex.exec(norm))){
+    rows.push({
+      numero: parseInt(m[1],10), fecha: toISODate(m[2], false),
+      capital: cleanNumberUS(m[3]), interes: cleanNumberUS(m[4]), gastos: cleanNumberUS(m[5])
+    });
+  }
+  if(rows.length<2) return null;
+
+  const cuotas = rows.map(function(r){
+    return { id: uid('c'), numero: r.numero, fecha: r.fecha, capital: Math.round(r.capital), interes: Math.round(r.interes), gastos: Math.round(r.gastos), estado: 'Pendiente' };
+  });
+
+  const header = { banco: 'Atlas' };
+  let mm = norm.match(/desembolso\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i);
+  if(mm) header.fechaInicio = toISODate(mm[1], false);
+  mm = norm.match(/nro\.?\s*cuenta\s*:?\s*(\d{4,10})/i);
+  if(mm) header.numeroOperacion = mm[1];
+  mm = norm.match(/\btasa\s*:?\s*([\d]{1,3}\.\d{1,3})\s*%/i);
+  if(mm) header.tasaAnual = parseFloat(mm[1]);
+  mm = norm.match(/total\s*cr[eé]dito\s*:?\s*([\d,]+\.\d{2})/i);
+  if(mm){
+    header.montoOriginal = cleanNumberUS(mm[1]);
+  }else{
+    header.montoOriginal = cuotas.reduce(function(a,c){ return a+c.capital; }, 0);
+  }
+
+  return { header: header, cuotas: cuotas };
+}
+function parseProformaText(text){
+  const norm = text.replace(/\s+/g,' ').trim();
+  const lower = normalizeHeader(norm);
+  const guess = {};
+
+  for(let i=0;i<PROFORMA_BANCOS.length;i++){
+    if(lower.indexOf(PROFORMA_BANCOS[i])!==-1){
+      const b = PROFORMA_BANCOS[i];
+      guess.banco = b.charAt(0).toUpperCase()+b.slice(1);
+      break;
+    }
+  }
+  if(!guess.banco){
+    const mb = norm.match(/(?:banco|entidad(?:\s*financiera)?)\s*[:\-]?\s*([A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ.& ]{2,30})/);
+    if(mb) guess.banco = mb[1].trim();
+  }
+
+  let m = norm.match(/(?:n(?:[°º]|ro)?\.?\s*(?:de\s*)?(?:operaci[oó]n|pr[eé]stamo|contrato|cr[eé]dito|cuenta|referencia)|(?:operaci[oó]n|contrato|cr[eé]dito)\s*n(?:[°º]|ro)?\.?)\s*[:\-]?\s*([\w\-\/]{3,20})/i);
+  if(m) guess.numeroOperacion = m[1].trim();
+
+  m = norm.match(/(?:monto|capital|importe|valor|suma|desembolso)(?:\s*(?:total|neto)?)?(?:\s*(?:del|de\s*el)?\s*(?:pr[eé]stamo|cr[eé]dito|contrato)?)\s*[:\-]?\s*(?:Gs\.?|PYG)?\s*([\d][\d.,]{4,15})/i);
+  if(m){
+    guess.montoOriginal = cleanNumber(m[1]);
+  }else{
+    const nums = Array.from(norm.matchAll(/(?:Gs\.?|PYG)\s*([\d][\d.,]{4,15})/gi)).map(function(x){ return cleanNumber(x[1]); });
+    if(nums.length){
+      guess.montoOriginal = Math.max.apply(null, nums);
+    }else{
+      // último recurso: el número más grande de al menos 6 dígitos en todo el texto
+      const anyNums = Array.from(norm.matchAll(/\b([\d]{1,3}(?:[.,]\d{3}){1,5})\b/g)).map(function(x){ return cleanNumber(x[1]); }).filter(function(n){ return n>=100000; });
+      if(anyNums.length) guess.montoOriginal = Math.max.apply(null, anyNums);
+    }
+  }
+
+  m = norm.match(/(?:tasa(?:\s*(?:de\s*inter[eé]s|nominal))?(?:\s*anual)?|t\.?n\.?a\.?|inter[eé]s(?:\s*anual)?)\s*[:\-]?\s*([\d]{1,2}[.,]?\d{0,3})\s*%/i);
+  if(!m) m = norm.match(/([\d]{1,2}[.,]?\d{0,3})\s*%\s*(?:anual|t\.?n\.?a\.?)?/i);
+  if(m) guess.tasaAnual = parseFloat(String(m[1]).replace(',','.'))||null;
+
+  m = norm.match(/(?:fecha\s*(?:de\s*)?(?:inicio|desembolso|emisi[oó]n|firma|otorgamiento))\s*[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+  if(!m) m = norm.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/);
+  if(m) guess.fechaInicio = toISODate(m[1], false);
+
+  m = norm.match(/(?:plazo(?:\s*de)?|n(?:[°º]|ro)?\.?\s*de\s*cuotas|cantidad\s*de\s*cuotas|n(?:[°º]|ro)?\.?\s*cuotas)\s*[:\-]?\s*(\d{1,3})\s*(?:cuotas|meses)?/i);
+  if(!m) m = norm.match(/(?:en\s*)?(\d{1,3})\s*cuotas\b/i);
+  if(!m) m = norm.match(/(\d{1,3})\s*meses(?:\s*(?:de\s*)?plazo)?/i);
+  if(m) guess.plazoMeses = parseInt(m[1],10);
+
+  return guess;
+}
+let proformaPendingFile = null;
+let proformaRotation = 0;
+let proformaPreviewBaseCanvas = null;
+
+async function handleProformaUpload(e){
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  proformaPendingFile = file;
+  proformaRotation = 0;
+  try{
+    const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
+    if(isPdf){
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({scale: 1.4});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
+      proformaPreviewBaseCanvas = canvas;
+    }else{
+      const img = await loadImageFromFile(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      canvas.getContext('2d').drawImage(img,0,0);
+      proformaPreviewBaseCanvas = canvas;
+    }
+    renderRotatePreview();
+    document.getElementById('rotate-overlay').classList.add('open');
+  }catch(err){
+    console.error(err);
+    // si falla la vista previa, se procesa igual sin rotación en vez de bloquear todo
+    processProformaFile(file, 0);
+  }
+}
+function rotateProformaPreview(deg){
+  proformaRotation = ((proformaRotation + deg) % 360 + 360) % 360;
+  renderRotatePreview();
+}
+function renderRotatePreview(){
+  const rotated = rotateCanvas(proformaPreviewBaseCanvas, proformaRotation);
+  const out = document.getElementById('rotate-preview-canvas');
+  out.width = rotated.width;
+  out.height = rotated.height;
+  out.getContext('2d').drawImage(rotated, 0, 0);
+}
+function closeRotateModal(){
+  document.getElementById('rotate-overlay').classList.remove('open');
+  proformaPendingFile = null;
+  proformaPreviewBaseCanvas = null;
+}
+function confirmRotationAndProcess(){
+  const file = proformaPendingFile;
+  const rotation = proformaRotation;
+  document.getElementById('rotate-overlay').classList.remove('open');
+  proformaPendingFile = null;
+  proformaPreviewBaseCanvas = null;
+  processProformaFile(file, rotation);
+}
+async function processProformaFile(file, rotation){
+  setProformaStatus('Leyendo documento…');
+  try{
+    let text = '';
+    const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
+    if(isPdf) text = await extractPdfText(file, rotation);
+    else text = await extractImageText(file, rotation);
+
+    const plan = parsePlanDePagosReport(text) || parseSudamerisPropuesta(text) || parseAtlasLiquidacion(text) || parseContinentalExtracto(text) || parsePlanDePagosInicial(text) || parseZetaBanco(text);
+
+    if(plan && plan.cuotas.length>0){
+      pendingProformaCuotas = plan.cuotas;
+      const guess = plan.header;
+      openLoanModal();
+      document.getElementById('l-tipo').value = 'Variable';
+      toggleGraciaField();
+      if(guess.banco) document.getElementById('l-banco').value = guess.banco;
+      if(guess.numeroOperacion) document.getElementById('l-numop').value = guess.numeroOperacion;
+      if(guess.montoOriginal) document.getElementById('l-monto').value = guess.montoOriginal;
+      if(guess.tasaAnual) document.getElementById('l-tasa').value = guess.tasaAnual;
+      if(guess.fechaInicio) document.getElementById('l-inicio').value = guess.fechaInicio;
+      document.getElementById('l-plazo').value = plan.cuotas.length;
+
+      document.getElementById('l-proforma-debug-text').textContent = text.trim() || '(no se extrajo texto del documento)';
+      document.getElementById('l-proforma-debug').style.display = 'block';
+      setProformaStatus('');
+      appAlert('Encontramos un cronograma completo: se detectaron '+plan.cuotas.length+' cuotas reales (fecha, capital, interés puro, gastos administrativos/bancarios y estado pagada/pendiente), tal cual figuran en el documento. Revisá los datos generales y guardá el préstamo para cargar el cronograma completo.');
+      return;
+    }
+
+    const guess = parseProformaText(text);
+    const foundAny = guess.banco||guess.numeroOperacion||guess.montoOriginal||guess.tasaAnual||guess.fechaInicio||guess.plazoMeses;
+
+    openLoanModal();
+    if(guess.banco) document.getElementById('l-banco').value = guess.banco;
+    if(guess.numeroOperacion) document.getElementById('l-numop').value = guess.numeroOperacion;
+    if(guess.montoOriginal) document.getElementById('l-monto').value = guess.montoOriginal;
+    if(guess.tasaAnual) document.getElementById('l-tasa').value = guess.tasaAnual;
+    if(guess.fechaInicio) document.getElementById('l-inicio').value = guess.fechaInicio;
+    if(guess.plazoMeses) document.getElementById('l-plazo').value = guess.plazoMeses;
+
+    document.getElementById('l-proforma-debug-text').textContent = text.trim() || '(no se extrajo texto del documento)';
+    document.getElementById('l-proforma-debug').style.display = 'block';
+
+    setProformaStatus('');
+    if(foundAny){
+      appAlert('Completamos los datos que pudimos reconocer del documento. Revisalos con cuidado (sobre todo si era una foto) y corregí lo que haga falta antes de guardar.');
+    }else{
+      appAlert('No pudimos reconocer datos automáticamente en este documento. Completá el préstamo a mano en el formulario que se abrió.');
+    }
+  }catch(err){
+    console.error(err);
+    setProformaStatus('');
+    if(err && err.message==='OCR_BLOCKED'){
+      appAlert('Este documento es un escaneo/foto y necesita reconocimiento óptico (OCR), pero esta vista previa de Claude bloquea esa función por seguridad.\n\nDescargá el archivo y abrilo directamente en tu navegador (Chrome/Edge, fuera de Claude) para que el OCR funcione, o cargá el préstamo a mano con "+ Nuevo préstamo".');
+    }else{
+      appAlert('No se pudo leer el archivo automáticamente. Podés cargar el préstamo a mano con "+ Nuevo préstamo".');
+    }
+  }
+}
+
+function openLoanModal(loan){
+  document.getElementById('loan-modal-title').textContent = loan ? 'Editar préstamo' : 'Nuevo préstamo';
+  document.getElementById('l-id').value = loan ? loan.id : '';
+  document.getElementById('l-banco').value = loan ? loan.banco : '';
+  document.getElementById('l-numop').value = loan ? loan.numeroOperacion : '';
+  document.getElementById('l-tipo').value = loan ? loan.tipoCuota : 'Frances';
+  document.getElementById('l-monto').value = loan ? loan.montoOriginal : '';
+  document.getElementById('l-tasa').value = loan ? loan.tasaAnual : '';
+  document.getElementById('l-inicio').value = loan ? loan.fechaInicio : '';
+  document.getElementById('l-plazo').value = loan ? (loan.plazoMeses||'') : '';
+  document.getElementById('l-gracia').value = loan ? (loan.graciaMeses||'') : '';
+  document.getElementById('l-frecap').value = loan ? (loan.frecuenciaCapital||6) : 6;
+  document.getElementById('l-notas').value = loan ? loan.notas : '';
+  toggleGraciaField();
+  document.getElementById('l-proforma-debug').style.display = 'none';
+  document.getElementById('loan-overlay').classList.add('open');
+}
+function closeLoanModal(){
+  pendingProformaCuotas = null;
+  document.getElementById('loan-overlay').classList.remove('open');
+  document.getElementById('loan-form').reset();
+}
+function saveLoan(e){
+  e.preventDefault();
+  const banco = document.getElementById('l-banco').value.trim();
+  const monto = parseFloat(document.getElementById('l-monto').value);
+  const tasa = parseFloat(document.getElementById('l-tasa').value);
+  const inicio = document.getElementById('l-inicio').value;
+  const faltantes = [];
+  if(!banco) faltantes.push('Entidad / banco');
+  if(isNaN(monto) || monto<=0) faltantes.push('Monto total del préstamo (revisá que no tenga puntos ni comas, solo números)');
+  if(isNaN(tasa) || tasa<0) faltantes.push('Tasa de interés anual');
+  if(!inicio) faltantes.push('Fecha de inicio');
+  if(faltantes.length>0){
+    appAlert('Faltan completar estos campos antes de guardar:\n\n- ' + faltantes.join('\n- '));
+    return false;
+  }
+  const id = document.getElementById('l-id').value || uid('l');
+  const existing = loans.find(function(l){ return l.id===id; });
+  let cuotasIniciales = existing ? existing.cuotas : [];
+  if(!existing && pendingProformaCuotas && pendingProformaCuotas.length>0){
+    cuotasIniciales = pendingProformaCuotas;
+  }
+  const data = {
+    id: id,
+    banco: banco,
+    numeroOperacion: document.getElementById('l-numop').value.trim(),
+    tipoCuota: document.getElementById('l-tipo').value,
+    montoOriginal: monto,
+    tasaAnual: tasa,
+    fechaInicio: inicio,
+    plazoMeses: parseInt(document.getElementById('l-plazo').value,10)||null,
+    graciaMeses: parseInt(document.getElementById('l-gracia').value,10)||null,
+    frecuenciaCapital: parseInt(document.getElementById('l-frecap').value,10)||null,
+    notas: document.getElementById('l-notas').value.trim(),
+    cuotas: cuotasIniciales
+  };
+  pendingProformaCuotas = null;
+  const idx = loans.findIndex(function(l){ return l.id===id; });
+  if(idx>=0) loans[idx]=data; else loans.push(data);
+  persist();
+  closeLoanModal();
+  renderAll();
+  if(activeLoanId===id) renderDetail();
+  return false;
+}
+function autogenFromModal(){
+  const sistema = document.getElementById('l-tipo').value;
+  if(sistema==='Variable'){
+    appAlert('El sistema "Variable / manual" no se genera automáticamente: guardá el préstamo y cargá cada cuota desde su cronograma, con el capital y el interés que corresponda a cada una.');
+    return;
+  }
+  const monto = parseFloat(document.getElementById('l-monto').value)||0;
+  const tasa = parseFloat(document.getElementById('l-tasa').value)||0;
+  const inicio = document.getElementById('l-inicio').value;
+  const plazo = parseInt(document.getElementById('l-plazo').value,10)||0;
+  const gracia = parseInt(document.getElementById('l-gracia').value,10)||0;
+  const frecap = parseInt(document.getElementById('l-frecap').value,10)||6;
+  if(!monto || !inicio || !plazo){
+    appAlert('Para generar el cronograma automático completá monto, fecha de inicio y plazo (N° de cuotas).');
+    return;
+  }
+  if(sistema==='Gracia' && (!gracia || gracia>=plazo)){
+    appAlert('Para el sistema "Con gracia de capital" indicá cuántos meses son solo de interés (debe ser menor al plazo total).');
+    return;
+  }
+  if(sistema==='BulletPeriodico' && (!frecap || frecap>plazo)){
+    appAlert('Para el sistema "Bullet periódico" indicá cada cuántos meses se paga capital (debe ser menor o igual al plazo total).');
+    return;
+  }
+  const id = document.getElementById('l-id').value || uid('l');
+  const existing = loans.find(function(l){ return l.id===id; });
+
+  function proceed(){
+    const cuotas = generateSchedule(monto, tasa, plazo, inicio, sistema, gracia, frecap);
+    const commonData = {
+      banco: document.getElementById('l-banco').value.trim(),
+      numeroOperacion: document.getElementById('l-numop').value.trim(),
+      tipoCuota: sistema,
+      montoOriginal: monto, tasaAnual: tasa, fechaInicio: inicio, plazoMeses: plazo,
+      graciaMeses: sistema==='Gracia' ? gracia : null,
+      frecuenciaCapital: sistema==='BulletPeriodico' ? frecap : null,
+      notas: document.getElementById('l-notas').value.trim()
+    };
+    if(existing){
+      Object.assign(existing, commonData);
+      existing.cuotas = cuotas;
+    }else{
+      commonData.id = id;
+      commonData.cuotas = cuotas;
+      loans.push(commonData);
+    }
+    persist();
+    closeLoanModal();
+    renderAll();
+    if(id) openDetail(id);
+  }
+
+  if(existing && existing.cuotas.length>0){
+    appConfirm('Este préstamo ya tiene cuotas cargadas. ¿Reemplazar el cronograma completo por uno generado automáticamente ('+SISTEMA_LABELS[sistema]+')?', proceed);
+  }else{
+    proceed();
+  }
+}
+function generateSchedule(monto, tasaAnual, n, fechaInicio, sistema, graciaMeses, frecuenciaCapital){
+  const r = tasaAnual/100/12;
+  const cuotas = [];
+  let saldo = monto;
+
+  if(sistema==='BulletPeriodico'){
+    // Interés todos los meses sobre el saldo; el capital se amortiza en partes iguales
+    // cada `frecuenciaCapital` meses (además de siempre en el último mes del plazo).
+    const k = frecuenciaCapital || 6;
+    const capMonths = [];
+    for(let i=k;i<=n;i+=k) capMonths.push(i);
+    if(capMonths.length===0 || capMonths[capMonths.length-1]!==n) capMonths.push(n);
+    const numPagos = capMonths.length;
+    const capitalChunk = monto / numPagos;
+    let pagoIdx = 0;
+    for(let i=1;i<=n;i++){
+      const interes = saldo * r;
+      let capital = 0;
+      if(capMonths.indexOf(i)!==-1){
+        pagoIdx++;
+        capital = (pagoIdx===numPagos) ? saldo : capitalChunk;
+      }
+      saldo -= capital;
+      cuotas.push({id:uid('c'), numero:i, fecha:addMonths(fechaInicio,i), capital:Math.round(capital), interes:Math.round(interes), estado:'Pendiente', gastos:0});
+    }
+    return cuotas;
+  }
+
+  if(sistema==='Aleman'){
+    // Capital fijo cada mes; el interés baja porque se calcula sobre el saldo restante
+    const capitalFijo = monto / n;
+    for(let i=1;i<=n;i++){
+      const interes = saldo * r;
+      const capital = (i===n) ? saldo : capitalFijo;
+      saldo -= capital;
+      cuotas.push({id:uid('c'), numero:i, fecha:addMonths(fechaInicio,i), capital:Math.round(capital), interes:Math.round(interes), estado:'Pendiente', gastos:0});
+    }
+    return cuotas;
+  }
+
+  if(sistema==='SoloInteres'){
+    // Solo interés todos los meses; el 100% del capital se paga en la última cuota
+    for(let i=1;i<=n;i++){
+      const interes = saldo * r;
+      const capital = (i===n) ? saldo : 0;
+      cuotas.push({id:uid('c'), numero:i, fecha:addMonths(fechaInicio,i), capital:Math.round(capital), interes:Math.round(interes), estado:'Pendiente', gastos:0});
+      if(i===n) saldo = 0;
+    }
+    return cuotas;
+  }
+
+  if(sistema==='Gracia'){
+    // Primeros `graciaMeses`: solo interés, capital no se reduce
+    for(let i=1;i<=graciaMeses;i++){
+      const interes = saldo * r;
+      cuotas.push({id:uid('c'), numero:i, fecha:addMonths(fechaInicio,i), capital:0, interes:Math.round(interes), estado:'Pendiente', gastos:0});
+    }
+    // Resto de los meses: sistema francés sobre el saldo original y los meses restantes
+    const nRestantes = n - graciaMeses;
+    const cuotaFija = r>0 ? (saldo * r / (1 - Math.pow(1+r, -nRestantes))) : (saldo/nRestantes);
+    for(let i=1;i<=nRestantes;i++){
+      const interes = saldo * r;
+      let capital = cuotaFija - interes;
+      if(i===nRestantes) capital = saldo;
+      saldo -= capital;
+      cuotas.push({id:uid('c'), numero:graciaMeses+i, fecha:addMonths(fechaInicio,graciaMeses+i), capital:Math.round(capital), interes:Math.round(interes), estado:'Pendiente', gastos:0});
+    }
+    return cuotas;
+  }
+
+  // Francés (por defecto): cuota fija, capital + interés todos los meses
+  const cuotaFija = r>0 ? (monto * r / (1 - Math.pow(1+r, -n))) : (monto/n);
+  for(let i=1;i<=n;i++){
+    const interes = saldo * r;
+    let capital = cuotaFija - interes;
+    if(i===n) capital = saldo;
+    saldo -= capital;
+    cuotas.push({id:uid('c'), numero:i, fecha:addMonths(fechaInicio,i), capital:Math.round(capital), interes:Math.round(interes), estado:'Pendiente', gastos:0});
+  }
+  return cuotas;
+}
+function deleteLoanFromDetail(){
+  if(!activeLoanId) return;
+  const idToDelete = activeLoanId;
+  appConfirm('¿Eliminar este préstamo y todo su cronograma de cuotas? Esta acción no se puede deshacer.', function(){
+    loans = loans.filter(function(l){ return l.id!==idToDelete; });
+    persist();
+    closeDetail();
+    renderAll();
+  });
+}
+function editLoanFromDetail(){
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  if(loan) openLoanModal(loan);
+}
+
+/* ---------- detalle / cronograma ---------- */
+function openDetail(loanId){
+  activeLoanId = loanId;
+  renderDetail();
+  document.getElementById('detail-overlay').classList.add('open');
+}
+function closeDetail(){
+  document.getElementById('detail-overlay').classList.remove('open');
+  activeLoanId = null;
+  renderAll();
+}
+function renderDetail(){
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  if(!loan) return;
+  const t = loanTotals(loan);
+  document.getElementById('detail-title').textContent = loan.banco;
+  document.getElementById('detail-sub').textContent = (loan.numeroOperacion||'s/n')+' · '+(SISTEMA_LABELS[loan.tipoCuota]||loan.tipoCuota)+' · '+loan.tasaAnual+'% anual · Monto original '+money(loan.montoOriginal);
+
+  document.getElementById('detail-stats').innerHTML =
+    '<div class="dstat"><div class="dstat-label">Saldo pendiente</div><div class="dstat-value">'+money(t.saldoPendiente)+'</div></div>' +
+    '<div class="dstat"><div class="dstat-label">Interés pagado</div><div class="dstat-value">'+money(t.interesPagado)+'</div></div>' +
+    '<div class="dstat"><div class="dstat-label">Interés pendiente</div><div class="dstat-value">'+money(t.interesPendiente)+'</div></div>' +
+    '<div class="dstat"><div class="dstat-label">Gastos admin./bancarios</div><div class="dstat-value">'+money(t.gastosTotal)+'</div></div>' +
+    '<div class="dstat"><div class="dstat-label">Costo financiero total</div><div class="dstat-value">'+money(t.costoFinancieroTotal)+'</div></div>';
+
+  const pend = loan.cuotas.filter(function(c){ return c.estado==='Pendiente'; }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+  const pag = loan.cuotas.filter(function(c){ return c.estado==='Pagada'; }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+
+  const pendTable = document.getElementById('cuotas-pendientes-table');
+  if(pend.length===0){
+    pendTable.innerHTML = '<tr><td class="empty" style="border:none;">No hay cuotas pendientes.</td></tr>';
+  }else{
+    pendTable.innerHTML = '<tr><th class="mono">N°</th><th class="mono">Vencimiento</th><th class="mono">Capital</th><th class="mono">Interés</th><th class="mono">Gastos</th><th class="mono">Total</th><th>Estado</th><th style="text-align:right;">Acciones</th></tr>' +
+      pend.map(function(c){ return cuotaRow(c); }).join('');
+  }
+  const pagTable = document.getElementById('cuotas-pagadas-table');
+  if(pag.length===0){
+    pagTable.innerHTML = '<tr><td class="empty" style="border:none;">Todavía no hay cuotas pagadas.</td></tr>';
+  }else{
+    pagTable.innerHTML = '<tr><th class="mono">N°</th><th class="mono">Vencimiento</th><th class="mono">Capital</th><th class="mono">Interés</th><th class="mono">Gastos</th><th class="mono">Total</th><th>Estado</th><th style="text-align:right;">Acciones</th></tr>' +
+      pag.map(function(c){ return cuotaRow(c); }).join('');
+  }
+}
+function cuotaRow(c){
+  const d = daysUntil(c.fecha);
+  const gastos = c.gastos||0;
+  let badge = '<span class="badge badge-ok">Al día</span>';
+  if(c.estado==='Pendiente'){
+    if(d<0) badge = '<span class="badge badge-late">Vencida</span>';
+    else if(d<=7) badge = '<span class="badge badge-warn">Por vencer</span>';
+  }else{
+    badge = '<span class="pill">Pagada</span>';
+  }
+  return '<tr>' +
+    '<td class="mono">'+c.numero+'</td>' +
+    '<td class="mono">'+formatDate(c.fecha)+'</td>' +
+    '<td class="mono">'+money(c.capital)+'</td>' +
+    '<td class="mono">'+money(c.interes)+'</td>' +
+    '<td class="mono">'+money(gastos)+'</td>' +
+    '<td class="mono">'+money(c.capital+c.interes+gastos)+'</td>' +
+    '<td>'+badge+'</td>' +
+    '<td class="row-actions">' +
+      '<button class="icon-btn" title="'+(c.estado==='Pendiente'?'Marcar pagada':'Marcar pendiente')+'" onclick="toggleCuotaEstado(\''+c.id+'\')">'+(c.estado==='Pendiente'?'✓':'↺')+'</button>' +
+      '<button class="icon-btn" title="Editar" onclick="editCuota(\''+c.id+'\')">✎</button>' +
+      '<button class="icon-btn danger" title="Eliminar" onclick="deleteCuota(\''+c.id+'\')">✕</button>' +
+    '</td>' +
+  '</tr>';
+}
+function toggleCuotaEstado(cuotaId){
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  if(!loan) return;
+  const c = loan.cuotas.find(function(c){ return c.id===cuotaId; });
+  if(!c) return;
+  c.estado = c.estado==='Pendiente' ? 'Pagada' : 'Pendiente';
+  persist();
+  renderDetail();
+}
+function deleteCuota(cuotaId){
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  if(!loan) return;
+  appConfirm('¿Eliminar esta cuota del cronograma?', function(){
+    loan.cuotas = loan.cuotas.filter(function(c){ return c.id!==cuotaId; });
+    persist();
+    renderDetail();
+  });
+}
+function editCuota(cuotaId){
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  if(!loan) return;
+  const c = loan.cuotas.find(function(c){ return c.id===cuotaId; });
+  if(!c) return;
+  openCuotaModal(c);
+}
+
+/* ---------- modal: cuota ---------- */
+function openCuotaModal(cuota){
+  editingCuotaId = cuota ? cuota.id : null;
+  document.getElementById('cuota-modal-title').textContent = cuota ? 'Editar cuota' : 'Nueva cuota';
+  document.getElementById('c-loan-id').value = activeLoanId;
+  document.getElementById('c-id').value = cuota ? cuota.id : '';
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  const nextNum = loan ? loan.cuotas.length+1 : 1;
+  document.getElementById('c-numero').value = cuota ? cuota.numero : nextNum;
+  document.getElementById('c-fecha').value = cuota ? cuota.fecha : '';
+  document.getElementById('c-estado').value = cuota ? cuota.estado : 'Pendiente';
+  document.getElementById('c-capital').value = cuota ? cuota.capital : '';
+  document.getElementById('c-interes').value = cuota ? cuota.interes : '';
+  document.getElementById('c-gastos').value = cuota ? (cuota.gastos||0) : 0;
+  updateCuotaTotalPreview();
+  document.getElementById('cuota-overlay').classList.add('open');
+}
+function closeCuotaModal(){
+  document.getElementById('cuota-overlay').classList.remove('open');
+  document.getElementById('cuota-form').reset();
+  editingCuotaId = null;
+}
+function updateCuotaTotalPreview(){
+  const cap = parseFloat(document.getElementById('c-capital').value)||0;
+  const int = parseFloat(document.getElementById('c-interes').value)||0;
+  const gastos = parseFloat(document.getElementById('c-gastos').value)||0;
+  document.getElementById('c-total').value = money(cap+int+gastos);
+}
+document.addEventListener('input', function(e){
+  if(e.target && (e.target.id==='c-capital' || e.target.id==='c-interes' || e.target.id==='c-gastos')) updateCuotaTotalPreview();
+});
+function saveCuota(e){
+  e.preventDefault();
+  const loan = loans.find(function(l){ return l.id===activeLoanId; });
+  if(!loan) return false;
+  const fecha = document.getElementById('c-fecha').value;
+  const capital = parseFloat(document.getElementById('c-capital').value);
+  const interes = parseFloat(document.getElementById('c-interes').value);
+  const gastos = parseFloat(document.getElementById('c-gastos').value)||0;
+  const faltantes = [];
+  if(!fecha) faltantes.push('Fecha de vencimiento');
+  if(isNaN(capital) || capital<0) faltantes.push('Capital');
+  if(isNaN(interes) || interes<0) faltantes.push('Interés');
+  if(faltantes.length>0){
+    appAlert('Faltan completar estos campos antes de guardar la cuota:\n\n- ' + faltantes.join('\n- '));
+    return false;
+  }
+  const id = document.getElementById('c-id').value || uid('c');
+  const data = {
+    id: id,
+    numero: parseInt(document.getElementById('c-numero').value,10)||1,
+    fecha: fecha,
+    estado: document.getElementById('c-estado').value,
+    capital: capital,
+    interes: interes,
+    gastos: gastos
+  };
+  const idx = loan.cuotas.findIndex(function(c){ return c.id===id; });
+  if(idx>=0) loan.cuotas[idx]=data; else loan.cuotas.push(data);
+  persist();
+  closeCuotaModal();
+  renderDetail();
+  return false;
+}
+
+loadLoans();
+</script>
+</body>
+</html>

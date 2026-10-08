@@ -355,6 +355,8 @@
       <div class="field"><label>Columna: Fecha de pago</label><select id="si-col-fecha" onchange="refreshCurrentPreview()"></select></div>
       <div class="field"><label>Columna: Monto</label><select id="si-col-monto" onchange="refreshCurrentPreview()"></select></div>
       <div class="field"><label>Columna: N° de cheque (opcional)</label><select id="si-col-numero" onchange="refreshCurrentPreview()"></select></div>
+      <div class="field"><label>Columna: Monto ya pagado (opcional)</label><select id="si-col-pago" onchange="refreshCurrentPreview()"></select></div>
+      <div class="field"><label>Columna: Descontado en banco (opcional)</label><select id="si-col-descuento" onchange="refreshCurrentPreview()"></select></div>
     </div>
     <div class="section-title" style="margin-top:6px;">Vista previa (primeras filas)</div>
     <div class="ledger" style="margin-bottom:16px;"><table class="ltable" id="smart-preview-table"></table></div>
@@ -1191,29 +1193,91 @@ function handleExcelImport(e){
 let smartWorkbook = null;
 let smartHeaders = [];
 let smartRows = [];
+let smartRowNums = [];
 let smartModeIsMida = false;
 let midaParsedRows = [];
 const SMART_ALIASES = {
-  banco: ['banco','banco librador','entidad bancaria','banco emisor','banco pagador'],
+  banco: ['banco','banco librador','entidad bancaria','banco emisor','banco pagador','banco del cheque'],
   entidad: ['proveedor','beneficiario','razon social','acreedor','cliente','empresa','nombre','librador','pagado a','a favor de'],
   fecha: ['fecha de pago','fecha pago','fecha','vencimiento','fecha de vencimiento','fecha de emision','fecha emision'],
   monto: ['monto','importe','valor','monto del cheque','monto cheque','total','importe cheque'],
-  numero: ['numero','nro cheque','n cheque','nro. cheque','numero de cheque','num cheque','numero cheque']
+  numero: ['numero','nro cheque','n cheque','no cheque','nro de cheque','n de cheque','numero de cheque','num cheque','numero cheque','cheque n','cheque nro','cheque numero','nro','num','cheque'],
+  pago: ['pago','pagado','pagos','abonado','monto pagado','importe pagado','cobrado','cancelado'],
+  descuento: ['descuento en banco','descontado en','descontado en banco','banco descuento','banco de descuento','descuento','descontado','banco de descontado']
 };
 function normalizeHeader(s){
-  return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
 }
-function guessColumn(headers, aliases){
-  for(let i=0;i<headers.length;i++){
-    if(aliases.indexOf(normalizeHeader(headers[i]))!==-1) return i;
+/* versión tolerante para comparar encabezados: ignora puntos, °, º, guiones, mayúsculas y espacios de más */
+function normHdr(s){
+  return normalizeHeader(s).replace(/[°º\.\-_:\/]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function levenshtein(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=[],cur=[]; for(let j=0;j<=n;j++) prev[j]=j;
+  for(let i=1;i<=m;i++){ cur=[i]; for(let j=1;j<=n;j++){ cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); } prev=cur; }
+  return prev[n];
+}
+/* opts.used = columnas ya asignadas a otro campo (no se repiten); opts.exactOnly = solo coincidencia exacta */
+function guessColumn(headers, aliases, opts){
+  opts = opts||{};
+  const used = opts.used||[];
+  const H = headers.map(normHdr), A = aliases.map(normHdr);
+  for(let i=0;i<H.length;i++){
+    if(!H[i] || used.indexOf(i)!==-1) continue;
+    if(A.indexOf(H[i])!==-1) return i;
   }
-  for(let i=0;i<headers.length;i++){
-    const h = normalizeHeader(headers[i]);
-    for(let j=0;j<aliases.length;j++){
-      if(h.indexOf(aliases[j])!==-1 || aliases[j].indexOf(h)!==-1) return i;
+  if(opts.exactOnly) return -1;
+  for(let i=0;i<H.length;i++){
+    const h=H[i];
+    if(!h || h.length<3 || used.indexOf(i)!==-1) continue;     // los encabezados vacíos NUNCA coinciden
+    for(let j=0;j<A.length;j++){
+      const a=A[j];
+      if((a.length>=3 && h.indexOf(a)!==-1) || (h.length>=4 && a.indexOf(h)!==-1)) return i;
+    }
+  }
+  for(let i=0;i<H.length;i++){                                   // errores de tipeo ("Salfdfo", "Numro", etc.)
+    const h=H[i];
+    if(!h || h.length<5 || used.indexOf(i)!==-1) continue;
+    for(let j=0;j<A.length;j++){
+      const a=A[j];
+      if(a.length>=5 && levenshtein(h,a)<=(a.length>=8?2:1)) return i;
     }
   }
   return -1;
+}
+/* Si el encabezado del N° de cheque no se reconoce, se lo detecta por el contenido:
+   una columna de enteros de 4 a 10 dígitos, casi todos distintos entre sí. */
+function sniffNumeroColumn(rows, ncols, used){
+  for(let c=0;c<ncols;c++){
+    if(used.indexOf(c)!==-1) continue;
+    let ne=0, ints=0; const seen={};
+    rows.forEach(function(r){
+      const v=r[c]; if(v===''||v==null) return; ne++;
+      const s=String(v).trim().replace(/\.0+$/,'');
+      if(/^\d{4,10}$/.test(s)){ ints++; seen[s]=1; }
+    });
+    if(ne>=3 && ints/ne>=0.8 && Object.keys(seen).length/ne>=0.8) return c;
+  }
+  return -1;
+}
+function detectSmartColumns(headers, rows){
+  const used=[];
+  function take(key, opts){
+    opts=opts||{}; opts.used=used;
+    const i=guessColumn(headers, SMART_ALIASES[key], opts);
+    if(i>=0) used.push(i);
+    return i;
+  }
+  const idxFecha = take('fecha');
+  const idxMonto = take('monto');
+  const idxDescuento = take('descuento');
+  const idxPago = take('pago',{exactOnly:true});
+  const idxBanco = take('banco');
+  const idxEntidad = take('entidad');
+  let idxNumero = take('numero');
+  if(idxNumero<0){ idxNumero = sniffNumeroColumn(rows, headers.length, used); if(idxNumero>=0) used.push(idxNumero); }
+  return {fecha:idxFecha, monto:idxMonto, descuento:idxDescuento, pago:idxPago, banco:idxBanco, entidad:idxEntidad, numero:idxNumero};
 }
 function cleanNumber(val){
   if(typeof val === 'number') return val;
@@ -1367,13 +1431,13 @@ function onSmartSheetChange(){
       if((aoa[i]||[]).some(function(v){ return String(v).trim()!==''; })){ headerRowIdx2 = i; break; }
     }
     smartHeaders = (aoa[headerRowIdx2]||[]).map(function(h){ return String(h==null?'':h).trim(); });
-    smartRows = aoa.slice(headerRowIdx2+1).filter(function(row){ return row.some(function(v){ return String(v).trim()!==''; }); });
+    smartRows = []; smartRowNums = [];
+    aoa.slice(headerRowIdx2+1).forEach(function(row,k){
+      if(row.some(function(v){ return String(v).trim()!==''; })){ smartRows.push(row); smartRowNums.push(headerRowIdx2+k+2); }
+    });
 
-    const idxBanco = guessColumn(smartHeaders, SMART_ALIASES.banco);
-    const idxEntidad = guessColumn(smartHeaders, SMART_ALIASES.entidad);
-    const idxFecha = guessColumn(smartHeaders, SMART_ALIASES.fecha);
-    const idxMonto = guessColumn(smartHeaders, SMART_ALIASES.monto);
-    const idxNumero = guessColumn(smartHeaders, SMART_ALIASES.numero);
+    const det = detectSmartColumns(smartHeaders, smartRows);
+    const idxBanco = det.banco, idxEntidad = det.entidad, idxFecha = det.fecha, idxMonto = det.monto, idxNumero = det.numero;
 
     function fillSelect(id, guessIdx, allowNone){
       const sel = document.getElementById(id);
@@ -1387,6 +1451,8 @@ function onSmartSheetChange(){
     fillSelect('si-col-fecha', idxFecha, false);
     fillSelect('si-col-monto', idxMonto, false);
     fillSelect('si-col-numero', idxNumero, true);
+    fillSelect('si-col-pago', det.pago, true);
+    fillSelect('si-col-descuento', det.descuento, true);
   }
   refreshCurrentPreview();
 }
@@ -1414,30 +1480,79 @@ function renderMidaPreview(){
   }
   document.getElementById('smart-import-count').textContent = midaParsedRows.length + ' cheque(s) detectado(s) en el reporte';
 }
+function smartCols(){
+  function v(id){ const el=document.getElementById(id); return el ? parseInt(el.value,10) : -1; }
+  return {banco:v('si-col-banco'), entidad:v('si-col-entidad'), fecha:v('si-col-fecha'), monto:v('si-col-monto'),
+          numero:v('si-col-numero'), pago:v('si-col-pago'), descuento:v('si-col-descuento')};
+}
+/* Convierte las filas del Excel en pagos. No pierde ninguna fila con monto y fecha:
+   - sin proveedor/librador usa el banco o el N° de cheque como nombre
+   - respeta lo ya pagado (pago total -> Pagada; pago parcial -> se separa pagado y saldo)
+   - devuelve la lista exacta de filas omitidas y por qué */
+function buildPagosFromRows(rows, rowNums, cols, tipo){
+  const out = {pagos:[], omitidas:[]};
+  const cell = function(row,i){ return i>=0 ? row[i] : ''; };
+  rows.forEach(function(row,k){
+    const nFila = rowNums ? rowNums[k] : (k+2);
+    const entidadRaw = String(cell(row,cols.entidad)==null?'':cell(row,cols.entidad)).trim();
+    const banco = String(cell(row,cols.banco)==null?'':cell(row,cols.banco)).trim();
+    const numeroCheque = String(cell(row,cols.numero)==null?'':cell(row,cols.numero)).trim().replace(/\.0+$/,'');
+    const descuento = String(cell(row,cols.descuento)==null?'':cell(row,cols.descuento)).trim();
+    const monto = cleanNumber(cell(row,cols.monto));
+    const fecha = toISODate(cell(row,cols.fecha));
+    let pagado = cols.pago>=0 ? cleanNumber(cell(row,cols.pago)) : 0;
+    if(!monto || monto<=0 || !fecha){
+      const motivo = (!monto||monto<=0) ? 'sin monto' : 'fecha inválida';
+      out.omitidas.push({fila:nFila, motivo:motivo, detalle:[entidadRaw, formatDate(fecha)||''].filter(Boolean).join(' · ')});
+      return;
+    }
+    const entidad = entidadRaw || banco || (numeroCheque ? 'Cheque N° '+numeroCheque : 'Sin especificar');
+    const conceptoParts = [];
+    if(banco) conceptoParts.push('Banco: '+banco);
+    if(numeroCheque) conceptoParts.push('Cheque N° '+numeroCheque);
+    if(descuento) conceptoParts.push('Descontado en: '+descuento);
+    const concepto = conceptoParts.join(' · ');
+    const base = {tipo:tipo, entidad:entidad, fecha:fecha};
+    const claves = [pagoDedupeKey({tipo:tipo, entidad:entidad, concepto:concepto, monto:monto, fecha:fecha})];
+    if(pagado>=monto){
+      out.pagos.push({reg:Object.assign({id:uid('p'), concepto:concepto, monto:monto, estado:'Pagada'}, base), claves:claves});
+    }else if(pagado>0){
+      const saldo = Math.round((monto-pagado)*100)/100;
+      out.pagos.push({reg:Object.assign({id:uid('p'), concepto:concepto+' (pago parcial)', monto:pagado, estado:'Pagada'}, base),
+                      claves:claves.concat([pagoDedupeKey({tipo:tipo, entidad:entidad, concepto:concepto+' (pago parcial)', monto:pagado, fecha:fecha})])});
+      out.pagos.push({reg:Object.assign({id:uid('p'), concepto:concepto+' (saldo restante de pago parcial)', monto:saldo, estado:'Pendiente'}, base),
+                      claves:claves.concat([pagoDedupeKey({tipo:tipo, entidad:entidad, concepto:concepto+' (saldo restante de pago parcial)', monto:saldo, fecha:fecha})]), parteDe:true});
+    }else{
+      out.pagos.push({reg:Object.assign({id:uid('p'), concepto:concepto, monto:monto, estado:'Pendiente'}, base), claves:claves});
+    }
+  });
+  return out;
+}
 function refreshSmartPreview(){
-  const idxBanco = parseInt(document.getElementById('si-col-banco').value,10);
-  const idxEntidad = parseInt(document.getElementById('si-col-entidad').value,10);
-  const idxFecha = parseInt(document.getElementById('si-col-fecha').value,10);
-  const idxMonto = parseInt(document.getElementById('si-col-monto').value,10);
-  const idxNumero = parseInt(document.getElementById('si-col-numero').value,10);
-
-  const preview = smartRows.slice(0,6);
+  const cols = smartCols();
+  const res = buildPagosFromRows(smartRows, smartRowNums, cols, 'Cheque');
+  const preview = smartRows.slice(0,8);
   const table = document.getElementById('smart-preview-table');
   if(preview.length===0){
     table.innerHTML = '<tr><td class="empty" style="border:none;">La hoja no tiene filas de datos.</td></tr>';
   }else{
-    table.innerHTML = '<tr><th>Banco</th><th>Proveedor / entidad</th><th>N° Cheque</th><th>Fecha</th><th class="mono">Monto</th></tr>' +
+    table.innerHTML = '<tr><th>Banco</th><th>Proveedor / entidad</th><th>N° Cheque</th><th>Fecha</th><th class="mono">Monto</th><th class="mono">Pagado</th><th>Descontado en</th></tr>' +
       preview.map(function(row){
         return '<tr>' +
-          '<td>'+escapeHtml(idxBanco>=0 ? row[idxBanco] : '—')+'</td>' +
-          '<td>'+escapeHtml(row[idxEntidad]||'')+'</td>' +
-          '<td class="mono">'+escapeHtml(idxNumero>=0 ? row[idxNumero] : '—')+'</td>' +
-          '<td class="mono">'+formatDate(toISODate(row[idxFecha]))+'</td>' +
-          '<td class="mono">'+money(cleanNumber(row[idxMonto]))+'</td>' +
+          '<td>'+escapeHtml(cols.banco>=0 ? row[cols.banco] : '—')+'</td>' +
+          '<td>'+escapeHtml(cols.entidad>=0 ? (row[cols.entidad]||'') : '')+'</td>' +
+          '<td class="mono">'+escapeHtml(cols.numero>=0 ? row[cols.numero] : '—')+'</td>' +
+          '<td class="mono">'+formatDate(toISODate(cols.fecha>=0 ? row[cols.fecha] : ''))+'</td>' +
+          '<td class="mono">'+money(cleanNumber(cols.monto>=0 ? row[cols.monto] : 0))+'</td>' +
+          '<td class="mono">'+(cols.pago>=0 ? money(cleanNumber(row[cols.pago])) : '—')+'</td>' +
+          '<td>'+escapeHtml(cols.descuento>=0 ? (row[cols.descuento]||'') : '—')+'</td>' +
         '</tr>';
       }).join('');
   }
-  document.getElementById('smart-import-count').textContent = smartRows.length + ' fila(s) detectada(s) en la hoja';
+  const validas = smartRows.length - res.omitidas.length;
+  let txt = smartRows.length + ' fila(s) con datos · ' + validas + ' lista(s) para importar';
+  if(res.omitidas.length) txt += ' · ' + res.omitidas.length + ' se omitirán (' + res.omitidas.slice(0,4).map(function(o){ return 'fila '+o.fila+': '+o.motivo; }).join(', ') + (res.omitidas.length>4?'…':'') + ')';
+  document.getElementById('smart-import-count').textContent = txt;
 }
 function closeSmartImport(){
   document.getElementById('smart-import-overlay').classList.remove('open');
@@ -1453,7 +1568,7 @@ function pagoDedupeKey(p){
 }
 function confirmSmartImport(){
   const tipo = document.getElementById('si-tipo').value;
-  let added=0, skipped=0, duplicados=0;
+  let added=0, skipped=0, duplicados=0, omitidas=[];
   const existingKeys = {};
   pagos.forEach(function(p){ existingKeys[pagoDedupeKey(p)] = true; });
 
@@ -1476,40 +1591,29 @@ function confirmSmartImport(){
       added++;
     });
   }else{
-    const idxBanco = parseInt(document.getElementById('si-col-banco').value,10);
-    const idxEntidad = parseInt(document.getElementById('si-col-entidad').value,10);
-    const idxFecha = parseInt(document.getElementById('si-col-fecha').value,10);
-    const idxMonto = parseInt(document.getElementById('si-col-monto').value,10);
-    const idxNumero = parseInt(document.getElementById('si-col-numero').value,10);
-    smartRows.forEach(function(row){
-      const entidad = String(row[idxEntidad]||'').trim();
-      const monto = cleanNumber(row[idxMonto]);
-      const fecha = toISODate(row[idxFecha]);
-      if(!entidad || !monto || monto<=0 || !fecha){ skipped++; return; }
-      const banco = idxBanco>=0 ? String(row[idxBanco]||'').trim() : '';
-      const numeroCheque = idxNumero>=0 ? String(row[idxNumero]||'').trim() : '';
-      const conceptoParts = [];
-      if(banco) conceptoParts.push('Banco: '+banco);
-      if(numeroCheque) conceptoParts.push('Cheque N° '+numeroCheque);
-      const nuevoPago = {
-        id: uid('p'), tipo: tipo, entidad: entidad,
-        concepto: conceptoParts.join(' · '),
-        monto: monto, fecha: fecha, estado: 'Pendiente'
-      };
-      const key = pagoDedupeKey(nuevoPago);
-      if(existingKeys[key]){ duplicados++; return; }
-      existingKeys[key] = true;
-      pagos.push(nuevoPago);
+    const res = buildPagosFromRows(smartRows, smartRowNums, smartCols(), tipo);
+    omitidas = res.omitidas;
+    res.pagos.forEach(function(item){
+      const dup = item.claves.some(function(k){ return existingKeys[k]; });
+      if(dup){ if(!item.parteDe) duplicados++; return; }
+      item.claves.forEach(function(k){ existingKeys[k]=true; });
+      pagos.push(item.reg);
       added++;
     });
+    skipped = omitidas.length;
   }
-
   persistPagos();
   closeSmartImport();
   renderAll();
   let msg = 'Importación completa: '+added+' cheque(s)/pago(s) nuevo(s) agregado(s) como "'+pagoTipoLabel(tipo)+'".';
   if(duplicados>0) msg += '\n'+duplicados+' ya estaban cargados (mismo tipo, entidad, monto, fecha y concepto) y se omitieron para no duplicar.';
-  if(skipped>0) msg += '\n'+skipped+' fila(s) se omitieron por no tener proveedor, fecha o monto válido.';
+  if(skipped>0){
+    msg += '\n'+skipped+' fila(s) no se importaron:';
+    omitidas.slice(0,12).forEach(function(o){ msg += '\n · Fila '+o.fila+' del Excel: '+o.motivo+(o.detalle?' ('+o.detalle+')':''); });
+    if(omitidas.length>12) msg += '\n · … y '+(omitidas.length-12)+' más.';
+  }else if(!smartModeIsMida){
+    msg += '\nSe importaron todas las filas con datos.';
+  }
   appAlert(msg);
 }
 

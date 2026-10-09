@@ -3241,8 +3241,10 @@ function rotateCanvas(sourceCanvas, degrees){
   ctx.restore();
   return out;
 }
+let lastPdfLines = [];
 async function extractPdfText(file, rotation){
   rotation = rotation||0;
+  lastPdfLines = [];
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({data: buf}).promise;
@@ -3252,8 +3254,13 @@ async function extractPdfText(file, rotation){
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     fullText += content.items.map(function(it){ return it.str; }).join(' ') + '\n';
+    try{
+      const its = content.items.map(function(it){ return {s:it.str, x:it.transform[4], y:it.transform[5], w:it.width, h:Math.abs(it.height)||Math.abs(it.transform[3])||8}; });
+      lastPdfLines = lastPdfLines.concat(buildPdfLines(its));
+    }catch(e){ console.warn('layout', e); }
   }
   if(fullText.trim().length>20) return fullText;
+  lastPdfLines = [];
 
   // El PDF no tiene texto real (es un escaneo/foto): se renderiza cada página como imagen
   // (aplicando la rotación elegida) y se le aplica reconocimiento óptico (OCR).
@@ -3579,6 +3586,293 @@ function parseAtlasLiquidacion(text){
 
   return { header: header, cuotas: cuotas };
 }
+/* ====== LECTOR UNIVERSAL DE PROFORMAS (por posición en la hoja) ======
+   En vez de depender del orden en que el PDF guarda el texto (que en muchos bancos sale mezclado),
+   se reconstruyen las líneas según la posición (x,y) de cada palabra, tal como se ven en pantalla.
+   Luego se detecta la tabla de cuotas por sus encabezados (Capital, Interés, IVA, Total…) y los
+   datos generales (banco, operación, monto, tasa, fecha) por sus rótulos. */
+function nrmTxt(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function parseAmt(s){
+  s = String(s==null?'':s).replace(/[^\d.,\-]/g,'');
+  if(!/\d/.test(s)) return NaN;
+  const neg = s.indexOf('-')!==-1; s = s.replace(/-/g,'');
+  const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+  let v;
+  if(lc!==-1 && ld!==-1){
+    const dec = lc>ld ? ',' : '.', th = dec===',' ? '.' : ',';
+    v = parseFloat(s.split(th).join('').replace(dec,'.'));
+  }else if(lc!==-1 || ld!==-1){
+    const sep = lc!==-1 ? ',' : '.';
+    const parts = s.split(sep);
+    if(parts.length>2) v = parseFloat(parts.join(''));
+    else{
+      const frac = parts[1];
+      if(frac.length===3 && parts[0].length>=1 && parts[0].length<=3 && parts[0]!=='0') v = parseFloat(parts.join(''));
+      else v = parseFloat(parts[0]+'.'+frac);
+    }
+  }else v = parseFloat(s);
+  return neg ? -v : v;
+}
+function addMonthsISO(iso, n){
+  const d = new Date(iso+'T00:00:00'); const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth()+n);
+  const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(day,last));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+const RE_DATE_TOKEN = /^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2})$/;
+/* items de PDF.js -> líneas con celdas {s,x0,x1} */
+function buildPdfLines(items){
+  items = items.filter(function(it){ return it.s!=null && String(it.s).trim()!==''; });
+  items.sort(function(a,b){ return (b.y-a.y) || (a.x-b.x); });
+  const groups = [];
+  items.forEach(function(it){
+    const g = groups[groups.length-1];
+    const tol = Math.max(2, (it.h||8)*0.45);
+    if(g && Math.abs(g.y - it.y) <= tol){ g.items.push(it); }
+    else groups.push({y: it.y, items:[it]});
+  });
+  return groups.map(function(g){
+    g.items.sort(function(a,b){ return a.x-b.x; });
+    const cells = [];
+    g.items.forEach(function(it){
+      const h = it.h||8;
+      const last = cells[cells.length-1];
+      const str = String(it.s).replace(/\s+/g,' ').trim();
+      if(last && (it.x - last.x1) < h*0.7){
+        last.s += ((it.x - last.x1) > h*0.08 ? ' ' : '') + str;
+        last.x1 = Math.max(last.x1, it.x + (it.w||0));
+      }else cells.push({s:str, x0:it.x, x1:it.x + (it.w||str.length*h*0.5)});
+    });
+    return mkLine(cells);
+  });
+}
+function mkLine(cells){
+  let pos = 0;
+  cells.forEach(function(c){ c.i = pos; pos += c.s.length + 2; });
+  return { cells: cells, text: cells.map(function(c){ return c.s; }).join('  ') };
+}
+/* texto plano (OCR / imagen) -> líneas con celdas (se separan por 2+ espacios; x = posición del carácter) */
+function linesFromText(text){
+  const out = [];
+  String(text||'').split(/\r?\n/).forEach(function(raw){
+    if(!raw.trim()) return;
+    const cells = [];
+    const re = /\S+(?: \S+)*/g; let m;
+    while((m = re.exec(raw))){ cells.push({s:m[0], x0:m.index, x1:m.index+m[0].length}); }
+    if(cells.length) out.push(mkLine(cells));
+  });
+  return out;
+}
+function lineTokens(line){
+  const toks = [];
+  line.cells.forEach(function(c){
+    const parts = c.s.split(/\s+/); let off = 0;
+    const w = (c.x1 - c.x0) / Math.max(1, c.s.length);
+    parts.forEach(function(p){
+      const idx = c.s.indexOf(p, off); off = idx + p.length;
+      toks.push({s:p, x0: c.x0 + idx*w, x1: c.x0 + (idx+p.length)*w});
+    });
+  });
+  return toks;
+}
+const HDR_RE = /(?<![a-z])(iva\s*(?:s\/)?\s*inter[a-z]*|i\.?v\.?a\.?|impuestos?|seguros?|comision(?:es)?(?:\s*p\/\s*seguro)?|cargos?|gastos?|mora|punitorios?|total\s*(?:de\s*)?cuota|cuota\s*total|monto\s*(?:de\s*)?(?:la\s*)?cuota|importe\s*(?:de\s*)?(?:la\s*)?cuota|total|saldo(?:\s*capital)?(?:\s*(?:final|pendiente|restante))?|capital|amortizacion|interes(?:es)?|int\.|f(?:echa)?\.?\s*(?:de\s*)?(?:vencimiento|vcto\.?|vto\.?|pago|desde|hasta)|fecha|vencimiento|vcto\.?|vto\.?|n(?:ro|o|um|umero)?\.?\s*(?:de\s*)?cuotas?|n[°º]|cuota|dias|plazo|t\.?\s*cuota|tipo)(?![a-z])/gi;
+function hdrRoleOf(tok){
+  const t = nrmTxt(tok).replace(/\s+/g,' ');
+  if(/^(iva|i\.?v\.?a|impuesto)/.test(t)) return 'gasto';
+  if(/^(seguro|comision|cargo|gasto|mora|punitorio)/.test(t)) return 'gasto';
+  if(/^(total|cuota total|monto|importe)/.test(t)) return 'total';
+  if(/^saldo/.test(t)) return 'saldo';
+  if(/^(capital|amortiz)/.test(t)) return 'capital';
+  if(/^(interes|int\.)/.test(t)) return 'interes';
+  if(/^(f|fecha|vencimiento|vcto|vto)/.test(t)) return /desde/.test(t)?'fdesde':(/hasta/.test(t)?'fhasta':'fecha');
+  if(/^(n|nro|no|num|numero)\b|^n[°º]|^nro/.test(t)) return 'num';
+  if(/^(t\.?\s*cuota|tipo)/.test(t)) return 'tipo';
+  if(/^cuota/.test(t)) return 'num';
+  if(/^(dias|plazo)/.test(t)) return 'dias';
+  return null;
+}
+function detectTableHeader(line){
+  const txt = line.text, low = nrmTxt(txt);
+  const cols = []; let m; HDR_RE.lastIndex = 0;
+  while((m = HDR_RE.exec(low))){
+    const role = hdrRoleOf(m[1]);
+    if(!role) continue;
+    // posición x aproximada del rótulo
+    let x = m.index;
+    for(let k=0;k<line.cells.length;k++){
+      const c = line.cells[k];
+      if(m.index >= c.i && m.index <= c.i + c.s.length){
+        const w = (c.x1 - c.x0)/Math.max(1,c.s.length);
+        x = c.x0 + (m.index - c.i + m[1].length/2)*w; break;
+      }
+    }
+    cols.push({role: role, x: x, raw: m[1]});
+  }
+  if(cols.length<3) return null;
+  const roles = cols.map(function(c){ return c.role; });
+  const hasFecha = roles.indexOf('fecha')!==-1;
+  const amtRoles = roles.filter(function(r){ return r==='capital'||r==='interes'||r==='total'; }).length;
+  if(!hasFecha || amtRoles<2) return null;
+  // "cuota" suelta cuando ya hay una columna 'num' o 'tipo' se descarta
+  const seenNum = {};
+  const clean = cols.filter(function(c){
+    if(c.role==='num'){ if(seenNum.num) return false; seenNum.num = true; }
+    return true;
+  });
+  return clean;
+}
+function parseLayoutPlan(lines){
+  if(!lines || !lines.length) return null;
+  let cols = null; const rows = []; const seen = {};
+  lines.forEach(function(line){
+    const h = detectTableHeader(line);
+    if(h){ cols = h; return; }
+    if(!cols) return;
+    const toks = lineTokens(line);
+    const dates = toks.filter(function(t){ return RE_DATE_TOKEN.test(t.s); });
+    if(!dates.length) return;
+    // una fila de cuotas empieza con (a lo sumo) el número y/o el tipo antes de la primera fecha
+    if(toks.indexOf(dates[0])>2) return;
+    const rest = toks.filter(function(t){ return !RE_DATE_TOKEN.test(t.s); });
+    // número de cuota: primer entero corto antes de la primera fecha
+    let numero = null; let startIdx = 0;
+    if(rest.length && /^\d{1,3}$/.test(rest[0].s) && rest[0].x0 <= dates[0].x0){ numero = parseInt(rest[0].s,10); startIdx = 1; }
+    const nums = rest.slice(startIdx).filter(function(t){ return /^-?\(?[\d][\d.,]*\)?$/.test(t.s); });
+    const numCols = cols.filter(function(c){ return c.role==='capital'||c.role==='interes'||c.role==='gasto'||c.role==='total'||c.role==='saldo'||c.role==='dias'; });
+    const val = {capital:0, interes:0, gasto:0, total:null, saldo:null};
+    const assign = function(col, tok){
+      const v = parseAmt(tok.s); if(isNaN(v)) return;
+      if(col.role==='gasto') val.gasto += v;
+      else if(col.role==='dias') return;
+      else if(col.role==='total'||col.role==='saldo') val[col.role] = v;
+      else val[col.role] += v;
+    };
+    if(nums.length===numCols.length){
+      nums.forEach(function(t,i){ assign(numCols[i], t); });
+    }else{
+      const used = {};
+      nums.forEach(function(t){
+        const cx = (t.x0+t.x1)/2; let best = null, bd = Infinity;
+        numCols.forEach(function(c,ci){ const d = Math.abs(c.x - cx); if(d<bd){ bd = d; best = ci; } });
+        if(best!==null && !used[best]){ used[best] = true; assign(numCols[best], t); }
+      });
+    }
+    // fecha de vencimiento: la columna de fecha preferida (venc/vto/pago) entre las fechas de la fila
+    const dateCols = cols.filter(function(c){ return c.role==='fecha'||c.role==='fdesde'||c.role==='fhasta'; });
+    let pick = dates[0];
+    if(dateCols.length>1 && dateCols.length===dates.length){
+      let pi = dateCols.findIndex(function(c){ return /venc|vcto|vto|pago/.test(nrmTxt(c.raw)); });
+      if(pi<0) pi = dateCols.findIndex(function(c){ return c.role==='fecha'; });
+      if(pi<0) pi = 0;
+      pick = dates[pi];
+    }
+    const fecha = toISODate(pick.s, false);
+    if(!fecha) return;
+    let capital = val.capital, interes = val.interes, gasto = val.gasto;
+    const hasCapCol = cols.some(function(c){ return c.role==='capital'; });
+    const hasIntCol = cols.some(function(c){ return c.role==='interes'; });
+    if(val.total!=null){
+      if(!hasCapCol) capital = Math.max(0, val.total - interes - gasto);
+      else if(!hasIntCol) interes = Math.max(0, val.total - capital - gasto);
+    }
+    if(capital===0 && interes===0 && gasto===0 && !(val.total>0)) return;
+    const key = [numero, fecha, Math.round(capital), Math.round(interes), Math.round(gasto)].join('|');
+    if(seen[key]) return; seen[key] = true;
+    const paid = /\b(pagad[oa]|cancelad[oa]|abonad[oa])\b/.test(nrmTxt(line.text));
+    rows.push({numero: numero, fecha: fecha, capital: Math.round(capital), interes: Math.round(interes), gastos: Math.round(gasto), pagada: paid});
+  });
+  if(!rows.length) return null;
+  const cuotas = rows.map(function(r,i){
+    return { id: uid('c'), numero: r.numero || (i+1), fecha: r.fecha, capital: r.capital, interes: r.interes, gastos: r.gastos, estado: r.pagada?'Pagada':'Pendiente' };
+  });
+  return { header: {}, cuotas: cuotas };
+}
+/* ---- datos generales por rótulo ---- */
+function kvFind(lines, labelSrc, valSrc){
+  const lre = new RegExp('^(?:'+labelSrc+')\\s*(?:\\([^)]*\\))?\\s*[:.\\-]*\\s*(.*)$', 'i');
+  const vre = new RegExp('^\\s*[:\\-]?\\s*('+valSrc+')(?![\\w])', 'i');
+  for(let li=0; li<lines.length; li++){
+    const cells = lines[li].cells;
+    for(let ci=0; ci<cells.length; ci++){
+      const c = cells[ci];
+      const lm = nrmTxt(c.s).match(lre);
+      if(!lm) continue;
+      const rest = c.s.slice(c.s.length - lm[1].length);
+      let vm = lm[1] && rest.match(vre);
+      if(vm) return vm[1].trim();
+      for(let k=ci+1; k<Math.min(cells.length, ci+3); k++){
+        vm = cells[k].s.match(vre); if(vm) return vm[1].trim();
+        if(nrmTxt(cells[k].s).match(/^[a-z]/) && !/\d/.test(cells[k].s)) continue;
+      }
+      for(let lj=li+1; lj<Math.min(lines.length, li+3); lj++){
+        const cc = lines[lj].cells;
+        for(let k=0;k<cc.length;k++){
+          const mid = (cc[k].x0+cc[k].x1)/2, lmid = (c.x0+c.x1)/2;
+          if((mid>=c.x0-20 && mid<=c.x1+20) || (lmid>=cc[k].x0 && lmid<=cc[k].x1)){
+            vm = cc[k].s.match(vre); if(vm) return vm[1].trim();
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+const BANCO_NOMBRES = [
+  ['gnb','GNB'],['continental','Continental'],['itau','Itaú'],['sudameris','Sudameris'],['atlas','Atlas'],
+  ['familiar','Familiar'],['regional','Regional'],['visión|vision','Visión'],['ueno','Ueno'],['zeta','Zeta Banco'],
+  ['bnf|nacional de fomento','BNF'],['basa|banco basa','BASA'],['amambay','Amambay'],['bancop','Bancop'],
+  ['rio','Río'],['do brasil|brasil','Do Brasil'],['bbva','BBVA'],['interfisa','Interfisa'],['fic','FIC'],['solar','Solar'],
+  ['finexpar','Finexpar'],['tu financiera','Tu Financiera'],['cooperativa|coop\\.','Cooperativa']
+];
+function detectBancoNombre(lines){
+  const head = lines.slice(0, 12).map(function(l){ return nrmTxt(l.text); }).join(' \n ');
+  const all = lines.map(function(l){ return nrmTxt(l.text); }).join(' \n ');
+  for(const scope of [head, all]){
+    for(let i=0;i<BANCO_NOMBRES.length;i++){
+      if(new RegExp('(?<![a-z])(?:'+nrmTxt(BANCO_NOMBRES[i][0])+')(?![a-z])','i').test(scope)) return BANCO_NOMBRES[i][1];
+    }
+  }
+  const m = head.match(/banco\s+([a-z0-9&\.]+(?:\s+[a-z0-9&\.]+)?)/i);
+  if(m){
+    const raw = lines.slice(0,12).map(function(l){return l.text;}).join(' \n ').match(/banco\s+([A-Za-zÁÉÍÓÚÑáéíóúñ0-9&.]+(?:\s+(?!S\.A|SAECA|S\.R)[A-Za-zÁÉÍÓÚÑáéíóúñ0-9&.]+)?)/i);
+    if(raw) return raw[1].replace(/\s+(paraguay|py)$/i,'').trim();
+  }
+  return null;
+}
+function parseHeaderFromLines(lines){
+  const h = {};
+  if(!lines || !lines.length) return h;
+  const banco = detectBancoNombre(lines); if(banco) h.banco = banco;
+  const AMT = '(?:gs\\.?|pyg|usd|us\\$|\\$)?\\s*\\d[\\d.,]*';
+  const montoLabels = [
+    'capital solicitado|monto solicitado|importe solicitado|monto del (?:prestamo|credito|financiamiento)|monto (?:otorgado|aprobado|financiado|desembolsado|del desembolso|de la operacion)|capital (?:del prestamo|otorgado|desembolsado|financiado|prestado)|total (?:del )?(?:prestamo|credito)|importe (?:del )?(?:prestamo|credito|financiado)|valor del (?:prestamo|credito)|monto (?:prestamo|credito)|importe (?:a )?financiar|capital inicial|capital original',
+    'monto|capital|importe|desembolso'
+  ];
+  for(let i=0;i<montoLabels.length && !h.montoOriginal;i++){
+    const v = kvFind(lines, montoLabels[i], AMT);
+    if(v){ const n = parseAmt(v); if(n>0) h.montoOriginal = Math.round(n); }
+  }
+  const tasaVal = '\\d{1,3}(?:[.,]\\d+)?\\s*%?';
+  const tasaLabels = [
+    'tasa(?: nominal)?(?: anual)?(?: de interes)?(?: ordinaria| pactada| compensatoria)?',
+    'tasa de interes nominal anual|interes anual|interes nominal anual|t\\.?n\\.?a\\.?',
+    't\\.?a\\.?n\\.?'
+  ];
+  for(let i=0;i<tasaLabels.length && !h.tasaAnual;i++){
+    const v = kvFind(lines, tasaLabels[i], tasaVal);
+    if(v){ const n = parseFloat(v.replace('%','').replace(',','.')); if(n>0 && n<100) h.tasaAnual = n; }
+  }
+  const dv = kvFind(lines, '(?:fecha(?: de)? (?:valor|desembolso|inicio|apertura|otorgamiento|liquidacion|emision|alta|firma|operacion|contrato|prestamo)|f\\.? ?valor|desembolso|inicio)', '\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}');
+  if(dv){ const iso = toISODate(dv, false); if(iso) h.fechaInicio = iso; }
+  const nv = kvFind(lines, '(?:operacion(?: n[o°º.]*)?|n(?:ro|um|o|[°º])?\\.?\\s*(?:de\\s*)?(?:operacion|prestamo|credito|contrato)|numero\\s*(?:de\\s*)?(?:operacion|prestamo|credito|contrato)|prestamo(?: n[o°º.]*)?|credito(?: n[o°º.]*)?|contrato(?: n[o°º.]*)?)', '[A-Za-z]{0,3}\\d[\\w\\-\\/]{3,}');
+  if(nv) h.numeroOperacion = nv;
+  return h;
+}
+function buildDocLines(text, pdfLines){
+  return (pdfLines && pdfLines.length) ? pdfLines : linesFromText(text);
+}
+
 function parseProformaText(text){
   const norm = text.replace(/\s+/g,' ').trim();
   const lower = normalizeHeader(norm);
@@ -3601,14 +3895,14 @@ function parseProformaText(text){
 
   m = norm.match(/(?:monto|capital|importe|valor|suma|desembolso)(?:\s*(?:total|neto)?)?(?:\s*(?:del|de\s*el)?\s*(?:pr[eé]stamo|cr[eé]dito|contrato)?)\s*[:\-]?\s*(?:Gs\.?|PYG)?\s*([\d][\d.,]{4,15})/i);
   if(m){
-    guess.montoOriginal = cleanNumber(m[1]);
+    guess.montoOriginal = Math.round(parseAmt(m[1]))||0;
   }else{
-    const nums = Array.from(norm.matchAll(/(?:Gs\.?|PYG)\s*([\d][\d.,]{4,15})/gi)).map(function(x){ return cleanNumber(x[1]); });
+    const nums = Array.from(norm.matchAll(/(?:Gs\.?|PYG)\s*([\d][\d.,]{4,15})/gi)).map(function(x){ return Math.round(parseAmt(x[1]))||0; });
     if(nums.length){
       guess.montoOriginal = Math.max.apply(null, nums);
     }else{
       // último recurso: el número más grande de al menos 6 dígitos en todo el texto
-      const anyNums = Array.from(norm.matchAll(/\b([\d]{1,3}(?:[.,]\d{3}){1,5})\b/g)).map(function(x){ return cleanNumber(x[1]); }).filter(function(n){ return n>=100000; });
+      const anyNums = Array.from(norm.matchAll(/\b([\d]{1,3}(?:[.,]\d{3}){1,5})\b/g)).map(function(x){ return Math.round(parseAmt(x[1]))||0; }).filter(function(n){ return n>=100000; });
       if(anyNums.length) guess.montoOriginal = Math.max.apply(null, anyNums);
     }
   }
@@ -3698,7 +3992,23 @@ async function processProformaFile(file, rotation){
     if(isPdf) text = await extractPdfText(file, rotation);
     else text = await extractImageText(file, rotation);
 
-    const plan = parsePlanDePagosReport(text) || parseSudamerisPropuesta(text) || parseAtlasLiquidacion(text) || parseContinentalExtracto(text) || parsePlanDePagosInicial(text) || parseZetaBanco(text);
+    const docLines = buildDocLines(text, isPdf ? lastPdfLines : null);
+    const layoutText = docLines.map(function(l){ return l.text; }).join('\n');
+    let plan = parsePlanDePagosReport(text) || parseSudamerisPropuesta(text) || parseAtlasLiquidacion(text) || parseContinentalExtracto(text) || parsePlanDePagosInicial(text) || parseZetaBanco(text);
+    if(!plan || !plan.cuotas.length) plan = parseLayoutPlan(docLines);
+    const hdrLines = parseHeaderFromLines(docLines);
+    if(plan && plan.cuotas.length>0){
+      const hh = plan.header || {};
+      Object.keys(hdrLines).forEach(function(k){ if(hh[k]==null || hh[k]==='' || hh[k]===0) hh[k] = hdrLines[k]; });
+      if(!hh.montoOriginal) hh.montoOriginal = plan.cuotas.reduce(function(a,c){ return a + (c.capital||0); }, 0);
+      if(!hh.fechaInicio) hh.fechaInicio = addMonthsISO(plan.cuotas[0].fecha, -1);
+      if(!hh.plazoMeses){
+        const a = new Date(hh.fechaInicio+'T00:00:00'), b = new Date(plan.cuotas[plan.cuotas.length-1].fecha+'T00:00:00');
+        const meses = {}; plan.cuotas.forEach(function(c){ meses[c.fecha.slice(0,7)] = 1; });
+        hh.plazoMeses = Object.keys(meses).length || plan.cuotas.length;
+      }
+      plan.header = hh;
+    }
 
     if(plan && plan.cuotas.length>0){
       pendingProformaCuotas = plan.cuotas;
@@ -3711,9 +4021,9 @@ async function processProformaFile(file, rotation){
       if(guess.montoOriginal) document.getElementById('l-monto').value = guess.montoOriginal;
       if(guess.tasaAnual) document.getElementById('l-tasa').value = guess.tasaAnual;
       if(guess.fechaInicio) document.getElementById('l-inicio').value = guess.fechaInicio;
-      document.getElementById('l-plazo').value = plan.cuotas.length;
+      document.getElementById('l-plazo').value = guess.plazoMeses || plan.cuotas.length;
 
-      document.getElementById('l-proforma-debug-text').textContent = text.trim() || '(no se extrajo texto del documento)';
+      document.getElementById('l-proforma-debug-text').textContent = (layoutText || text).trim() || '(no se extrajo texto del documento)';
       document.getElementById('l-proforma-debug').style.display = 'block';
       setProformaStatus('');
       appAlert('Encontramos un cronograma completo: se detectaron '+plan.cuotas.length+' cuotas reales (fecha, capital, interés puro, gastos administrativos/bancarios y estado pagada/pendiente), tal cual figuran en el documento. Revisá los datos generales y guardá el préstamo para cargar el cronograma completo.');
@@ -3721,6 +4031,7 @@ async function processProformaFile(file, rotation){
     }
 
     const guess = parseProformaText(text);
+    Object.keys(hdrLines).forEach(function(k){ if(hdrLines[k]) guess[k] = hdrLines[k]; });
     const foundAny = guess.banco||guess.numeroOperacion||guess.montoOriginal||guess.tasaAnual||guess.fechaInicio||guess.plazoMeses;
 
     openLoanModal();
@@ -3731,7 +4042,7 @@ async function processProformaFile(file, rotation){
     if(guess.fechaInicio) document.getElementById('l-inicio').value = guess.fechaInicio;
     if(guess.plazoMeses) document.getElementById('l-plazo').value = guess.plazoMeses;
 
-    document.getElementById('l-proforma-debug-text').textContent = text.trim() || '(no se extrajo texto del documento)';
+    document.getElementById('l-proforma-debug-text').textContent = (layoutText || text).trim() || '(no se extrajo texto del documento)';
     document.getElementById('l-proforma-debug').style.display = 'block';
 
     setProformaStatus('');

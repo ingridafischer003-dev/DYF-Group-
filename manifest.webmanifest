@@ -4,9 +4,26 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#7a1f2b",
-  "theme_color": "#7a1f2b",
+  "background_color": "#ffffff",
+  "theme_color": "#1a86d9",
   "lang": "es",
+  "shortcuts": [
+    {
+      "name": "Flujo de caja",
+      "short_name": "Flujo",
+      "url": "./#flujo"
+    },
+    {
+      "name": "Cobranzas",
+      "short_name": "Cobranzas",
+      "url": "./#cobranzas"
+    },
+    {
+      "name": "Resumen del día",
+      "short_name": "Resumen",
+      "url": "./#resumen"
+    }
+  ],
   "icons": [
     {
       "src": "icon-192.png",

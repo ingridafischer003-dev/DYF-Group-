@@ -42,8 +42,8 @@
 
   /* alert banner */
   .banner{background:var(--clay-dim);border:1px solid var(--clay);border-radius:6px;padding:14px 18px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;}
-  .banner-title{font-family:'Fraunces',serif;font-weight:600;font-size:14.5px;color:#f0c4b4;white-space:nowrap;}
-  .banner-items{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#f0c4b4;display:flex;flex-wrap:wrap;gap:7px;}
+  .banner-title{font-family:'Fraunces',serif;font-weight:600;font-size:14.5px;color:#a8321c;white-space:nowrap;}
+  .banner-items{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a8321c;display:flex;flex-wrap:wrap;gap:7px;}
   .banner-items span{background:rgba(0,0,0,.18);padding:3px 8px;border-radius:3px;}
 
   /* tabs */
@@ -73,13 +73,15 @@
   .lc-label{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-400);letter-spacing:.06em;margin-bottom:4px;}
   .lc-value{font-family:'IBM Plex Mono',monospace;font-size:14px;}
   .badge{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;padding:3px 7px;border-radius:3px;display:inline-block;text-transform:uppercase;font-weight:600;}
-  .badge-ok{background:var(--sage-dim);color:#a9d3b5;}
-  .badge-warn{background:var(--amber-dim);color:#e8bd82;}
-  .badge-late{background:var(--clay-dim);color:#f0c4b4;border:1px solid var(--clay);}
+  .badge-ok{background:var(--sage-dim);color:#1d7a4a;}
+  .badge-warn{background:var(--amber-dim);color:#8a5a00;}
+  .badge-late{background:var(--clay-dim);color:#a8321c;border:1px solid var(--clay);}
 
   /* generic ledger table */
   .ledger{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:6px;overflow:hidden;overflow-x:auto;}
   table.ltable{width:100%;border-collapse:collapse;}
+  .ledger.scroll-y{max-height:75vh;overflow:auto;}
+  .ledger.scroll-y .ltable tr:first-child th{position:sticky;top:0;z-index:3;background:var(--ink-900);box-shadow:0 1px 0 var(--ink-700);}
   .ltable th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-400);text-align:left;padding:11px 14px;border-bottom:1px solid var(--ink-700);white-space:nowrap;}
   .ltable td{padding:11px 14px;border-bottom:1px solid var(--ink-800);font-size:13px;}
   .ltable tr:last-child td{border-bottom:none;}
@@ -98,6 +100,28 @@
   #pago-overlay{z-index:70;}
   #income-overlay{z-index:70;}
   #smart-import-overlay{z-index:70;}
+  #cob-overlay,#cobpar-overlay,#cobimp-overlay{z-index:70;}
+  /* pantalla de inicio y navegación por áreas */
+  .home-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin:8px 0 26px;}
+  .home-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;background:var(--ink-900);border:1px solid var(--ink-700);border-radius:10px;padding:22px 22px 18px;text-align:left;color:var(--paper);position:relative;overflow:hidden;transition:border-color .15s,transform .15s;}
+  .home-card:hover{border-color:var(--brass);transform:translateY(-2px);}
+  .home-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--brass);}
+  .home-card.soon::before{background:var(--ink-700);}
+  .home-card .hc-icon{font-size:26px;margin-bottom:10px;}
+  .home-card .hc-title{font-family:'Fraunces',serif;font-weight:600;font-size:20px;margin:0 0 4px;}
+  .home-card .hc-desc{color:var(--ink-300);font-size:12.5px;line-height:1.45;margin:0 0 14px;}
+  .home-card .hc-metric{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--brass);line-height:1.5;}
+  .home-card .hc-metric.alert{color:#c1432a;}
+  #section-bar{display:none;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
+  body.in-section #section-bar{display:flex;}
+  #global-tools.collapsed{display:none !important;}
+  .row-click{cursor:pointer;}
+  .row-sel td{background:var(--ink-800);}
+  .panel .modal-sub{color:var(--ink-400);font-size:12.5px;line-height:1.5;margin:0 0 14px;}
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 10px;align-items:center;}
+  .ltable td select,.ltable td input[type=text]{background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:5px 8px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12.5px;}
+  .ltable td input[type=checkbox]{accent-color:var(--brass);width:16px;height:16px;}
+  .filter-row select,.filter-row input{background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:7px 10px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12.5px;}
   #confirm-overlay{z-index:90;}
   #rotate-overlay{z-index:80;}
   #alert-overlay{z-index:90;}
@@ -169,7 +193,7 @@
   .cal-day .cal-num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-300);}
   .cal-day.weekend .cal-num, .cal-day.holiday .cal-num{color:var(--ink-400);}
   .cal-day .cal-amt{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--brass);font-weight:600;line-height:1.2;word-break:break-word;}
-  .cal-day .cal-holiday-tag{font-size:8.5px;color:#f0c4b4;text-transform:uppercase;letter-spacing:.03em;}
+  .cal-day .cal-holiday-tag{font-size:8.5px;color:#a8321c;text-transform:uppercase;letter-spacing:.03em;}
   .cal-day.has-obligations{border-color:var(--brass-dim);}
   .cal-day.is-today .cal-num{text-decoration:underline;text-underline-offset:3px;}
   .cal-day.is-selected{
@@ -208,19 +232,58 @@
     .detail-header{flex-direction:column;}
     .ltable th, .ltable td{padding:9px 10px;font-size:12px;}
   }
+
+  /* ===== Tema claro D&F: celeste y blanco ===== */
+  :root{
+    --ink-950:#f2f8fd; --ink-900:#ffffff; --ink-800:#e8f2fb; --ink-700:#cfe0f0;
+    --ink-400:#33506e; --ink-300:#1f3a57;
+    --paper:#071426; --paper-dim:#15304e;
+    --brass:#1a86d9; --brass-dim:#8fc3ee;
+    --clay:#d0452b; --clay-dim:#fdebe6;
+    --sage:#2a9560; --sage-dim:#e3f5eb;
+    --amber:#d58a0f; --amber-dim:#fdf1d6;
+  }
+  body{background:linear-gradient(180deg,#ffffff 0,#eaf4fc 340px,#f2f8fd 100%) fixed;background-color:#f2f8fd;}
+  .btn-primary{color:#fff;}
+  .btn-primary:hover{background:#1472c0;}
+  .stat,.home-card,.modal,.ledger,.loan-card,.chart-card{box-shadow:0 1px 4px rgba(20,70,130,.09);}
+  .home-card:hover{box-shadow:0 6px 18px rgba(26,134,217,.18);}
+  .overlay{background:rgba(15,42,74,.45);}
+  .banner-items span{background:rgba(208,69,43,.08);}
+  .brand-logo{height:84px;width:auto;display:block;margin:0 0 12px;}
+  body.in-section .brand-logo{height:56px;}
+  .ltable tr:hover td{background:#f1f8fe;}
+  .stat-label,.lc-label,.ltable th{color:#2b4766;}
+  .ltable th{font-weight:600;}
+  .cal-dow{color:#15304e;font-weight:600;font-size:11px;}
+  .cal-day .cal-num{color:#071426;font-size:13px;font-weight:700;}
+  .cal-day.weekend .cal-num,.cal-day.holiday .cal-num{color:#33506e;}
+  .cal-day .cal-amt{color:#0a3563;font-size:12px;font-weight:700;}
+  .cal-day.has-obligations{border-color:#1a86d9;border-width:1.5px;}
+  .cal-day.is-selected .cal-num,.cal-day.is-selected .cal-amt{color:#fff;}
+  .stat-sub,.lc-sub{color:#2b4766;font-size:12px;}
+  @media (max-width:700px){ .cal-day .cal-amt{font-size:9.5px;} .cal-day .cal-num{font-size:11.5px;} }
+  .eyebrow{color:#0f5fa8;font-weight:600;}
+  .tab-btn.active{color:#0f5fa8;}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#7a1f2b">
+<meta name="theme-color" content="#1a86d9">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">DYF Group — Finanzas</p>
-  <h1>Control de deudas y préstamos</h1>
-  <p class="subtitle">Cronograma de cuotas por préstamo, totales por mes y por banco, y costo financiero real de la empresa.</p>
-  <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
+  <img class="brand-logo" alt="D&F Group S.A." src="data:image/png;base64,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">
+  <p class="eyebrow" id="hdr-eyebrow">DYF Group</p>
+  <h1 id="hdr-title">Panel de control</h1>
+  <p class="subtitle" id="hdr-sub">Elegí el área en la que querés trabajar.</p>
+  <div id="section-bar">
+    <button class="btn-primary btn-small" onclick="goHome()">← Inicio</button>
+    <button class="btn-ghost btn-small" onclick="toggleTools()">🛠 Herramientas</button>
+    <button class="btn-ghost btn-small" onclick="openSyncModal()">🔄 <span id="sync-status-label2">Sincronización</span></button>
+  </div>
+  <div id="global-tools" style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
     <button class="btn-ghost btn-small" onclick="exportBackup()">⬇ Exportar copia de seguridad</button>
     <button class="btn-ghost btn-small" onclick="triggerImport()">⬆ Importar copia de seguridad</button>
     <input type="file" id="import-input" accept="application/json" style="display:none;" onchange="importBackup(event)">
@@ -239,20 +302,29 @@
   <div id="loading" class="loading">Cargando información guardada…</div>
 
   <div id="app" style="display:none;">
+    <div id="home-screen"><div class="home-grid" id="home-grid"></div></div>
+    <div id="section-wrap" style="display:none;">
     <div class="stats" id="stats"></div>
     <div id="banner-container"></div>
 
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="priority" onclick="switchTab('priority')">Prioridad</button>
-      <button class="tab-btn" data-tab="flujo" onclick="switchTab('flujo')">Flujo de caja</button>
-      <button class="tab-btn" data-tab="loans" onclick="switchTab('loans')">Préstamos</button>
+    <div class="tabs" id="tabs-bar">
+      <button class="tab-btn" data-tab="flujo" onclick="switchTab('flujo')">Calendario diario</button>
       <button class="tab-btn" data-tab="pagos" onclick="switchTab('pagos')">Cheques y pagos</button>
+      <button class="tab-btn active" data-tab="priority" onclick="switchTab('priority')">Prioridad</button>
+      <button class="tab-btn" data-tab="deudames" onclick="switchTab('deudames')">Deuda del mes</button>
+      <button class="tab-btn" data-tab="gastos" onclick="switchTab('gastos')">En qué se gasta</button>
+      <button class="tab-btn" data-tab="loans" onclick="switchTab('loans')">Préstamos</button>
       <button class="tab-btn" data-tab="bank" onclick="switchTab('bank')">Por banco</button>
       <button class="tab-btn" data-tab="month" onclick="switchTab('month')">Por mes</button>
       <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')">Estadísticas</button>
+      <button class="tab-btn" data-tab="cobranzas" onclick="switchTab('cobranzas')">Cobranzas</button>
+      <button class="tab-btn" data-tab="cobest" onclick="switchTab('cobest')">Estimación de ingresos</button>
+      <button class="tab-btn" data-tab="cobsup" onclick="switchTab('cobsup')">Supervisores</button>
+      <button class="tab-btn" data-tab="ventas" onclick="switchTab('ventas')">Ventas</button>
+      <button class="tab-btn" data-tab="resumen" onclick="switchTab('resumen')">Resumen del día</button>
     </div>
 
-    <div class="panel active" id="panel-priority">
+    <div class="panel" id="panel-priority">
       <div class="toolbar">
         <h2>Qué vence y hay que pagar</h2>
         <select id="priority-bank-filter" onchange="renderPriorityTab()" style="background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:7px 10px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12.5px;">
@@ -318,14 +390,258 @@
     <div class="panel" id="panel-month">
       <div class="toolbar">
         <h2>Total a pagar por mes</h2>
-        <span class="pill">Hacé clic en el ingreso de un mes para cargarlo</span>
+        <span class="pill">Hacé clic en "Otros ingresos" de un mes para cargarlo</span>
       </div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-300);margin:0 0 10px;flex-wrap:wrap;">
+        <input type="checkbox" id="month-link" onchange="cobSetLink(this.checked)">
+        <span>Sumar al ingreso de cada mes las cobranzas estimadas (se actualizan solas al cargar el reporte) <span id="month-link-info" style="color:var(--ink-400);"></span></span>
+      </label>
       <div class="ledger"><table class="ltable" id="month-table"></table></div>
     </div>
 
     <div class="panel" id="panel-stats">
       <div class="toolbar"><h2>Estadísticas y costo financiero</h2></div>
       <div id="stats-content"></div>
+    </div>
+
+    <div class="panel" id="panel-deudames">
+      <div class="toolbar">
+        <h2>Deuda total del mes</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-ghost btn-small" onclick="changeDmMonth(-1)">‹ Mes anterior</button>
+          <span class="pill" id="dm-month-label" style="min-width:150px;text-align:center;"></span>
+          <button class="btn-ghost btn-small" onclick="changeDmMonth(1)">Mes siguiente ›</button>
+          <button class="btn-ghost btn-small" onclick="goToThisMonthDm()">Este mes</button>
+        </div>
+      </div>
+      <div class="stat-grid" id="dm-summary"></div>
+      <div class="section-title">Desglose por tipo de obligación</div>
+      <div class="ledger" style="margin-bottom:8px;"><table class="ltable" id="dm-tipos"></table></div>
+
+      <div class="section-title">Cheques de proveedores por marca</div>
+      <p class="modal-sub" style="margin-top:-4px;">Hacé clic en una marca para ver sus cheques del mes. La marca es el nombre del proveedor; si un cheque tiene cargada una marca distinta (columna "Marca" del Excel o al editarlo), se usa esa.</p>
+      <div class="ledger" style="margin-bottom:14px;"><table class="ltable" id="dm-marcas"></table></div>
+      <div class="filter-row">
+        <span class="pill">Ver cheques de la marca:</span>
+        <select id="dm-marca-select" onchange="setDmSel('marca',this.value)"></select>
+      </div>
+      <div class="ledger scroll-y" style="margin-bottom:8px;"><table class="ltable" id="dm-detalle"></table></div>
+
+      <div class="section-title">Cheques a empresas del grupo, por empresa</div>
+      <p class="modal-sub" style="margin-top:-4px;">Hacé clic en una empresa para ver sus cheques del mes.</p>
+      <div class="ledger" style="margin-bottom:14px;"><table class="ltable" id="dm-empresas"></table></div>
+      <div class="filter-row">
+        <span class="pill">Ver cheques de la empresa:</span>
+        <select id="dm-empresa-select" onchange="setDmSel('empresa',this.value)"></select>
+      </div>
+      <div class="ledger scroll-y"><table class="ltable" id="dm-detalle-emp"></table></div>
+    </div>
+
+    <div class="panel" id="panel-gastos">
+      <div class="toolbar">
+        <h2>En qué gasta la empresa</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="pill">Período:</span>
+          <select id="gs-periodo" onchange="setGsPeriodo(this.value)" style="background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:7px 10px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12.5px;">
+            <option value="mes">Este mes</option>
+            <option value="mes-1">Mes anterior</option>
+            <option value="3m">Últimos 3 meses</option>
+            <option value="6m">Últimos 6 meses</option>
+            <option value="anio">Este año</option>
+            <option value="todo">Todo lo cargado</option>
+          </select>
+        </div>
+      </div>
+      <p class="modal-sub" style="margin-top:-6px;">Suma todo lo que la empresa tiene que pagar en el período (ya pagado y pendiente): cuotas de préstamos, cheques a proveedores, cheques a empresas del grupo y otros pagos.</p>
+      <div class="stat-grid" id="gs-summary"></div>
+      <div class="chart-card"><div class="chart-title">Por tipo de gasto</div><div id="gs-cats"></div></div>
+      <div class="chart-card"><div class="chart-title">Cheques a proveedores por marca</div><div id="gs-marcas"></div></div>
+      <div class="chart-card"><div class="chart-title">Proveedores a los que más se paga</div><div id="gs-prov"></div></div>
+      <div class="chart-card"><div class="chart-title">Empresas del grupo</div><div id="gs-grupo"></div></div>
+      <div class="chart-card"><div class="chart-title">Otros pagos (alquiler, sueldos, servicios, impuestos)</div><div id="gs-otros"></div></div>
+      <div class="chart-card"><div class="chart-title">Evolución de los últimos 6 meses</div><div id="gs-meses"></div></div>
+    </div>
+
+    <div class="panel" id="panel-cobranzas">
+      <div class="toolbar">
+        <h2>Cobranzas pendientes por vendedor</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-ghost btn-small danger" onclick="clearAllCobranzas()">Vaciar todas</button>
+          <button class="btn-primary btn-small" onclick="triggerCobImport()">📥 Importar desde Excel</button>
+          <input type="file" id="cob-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleCobExcelSelect(event)">
+          <button class="btn-primary" onclick="openCobModal()">+ Nueva cobranza</button>
+        </div>
+      </div>
+      <div class="stat-grid" id="cob-summary"></div>
+
+      <div class="section-title">Seguimiento por vendedor</div>
+      <p class="modal-sub" style="margin-top:-4px;">Hacé clic en un vendedor para ver solo sus cobranzas.</p>
+      <div class="ledger" style="margin-bottom:8px;"><table class="ltable" id="cob-vendedores"></table></div>
+      <div class="filter-row">
+        <select id="cob-filter-sup" onchange="setCobSup(this.value)"></select>
+        <select id="cob-filter-vendedor" onchange="setCobFilter('v',this.value)"></select>
+        <select id="cob-filter-estado" onchange="setCobFilter('e',this.value)">
+          <option value="pend">Pendientes</option>
+          <option value="venc">Vencidas</option>
+          <option value="prox">Vencen en 7 días</option>
+          <option value="cob">Cobradas</option>
+          <option value="todas">Todas</option>
+        </select>
+        <input type="text" id="cob-search" placeholder="Buscar cliente o documento…" oninput="setCobFilter('q',this.value)">
+      </div>
+      <div class="ledger scroll-y"><table class="ltable" id="cob-table"></table></div>
+    </div>
+
+    <div class="panel" id="panel-cobest">
+      <div class="toolbar"><h2>Estimación de ingresos por cobranzas</h2>
+        <select id="cobest-filter-sup" onchange="setCobSup(this.value)"></select>
+      </div>
+      <p class="modal-sub" style="margin-top:-4px;">Calcula cuánto se espera recaudar según los vencimientos. Ajustá los porcentajes según cómo cobran realmente (se guardan en esta computadora).</p>
+      <div class="filter-row">
+        <label style="font-size:12.5px;color:var(--ink-300);display:flex;gap:6px;align-items:center;">Reporte de cobranzas cargado hasta el <input type="date" id="cobest-hasta" onchange="cobSetHasta(this.value)"></label>
+      </div>
+      <p class="modal-sub" id="cobest-hasta-info" style="margin-top:-2px;"></p>
+      <div class="filter-row">
+        <label style="font-size:12.5px;color:var(--ink-300);display:flex;gap:6px;align-items:center;">Se estima cobrar <input type="number" id="cob-pct-atrasado" min="0" max="100" style="width:70px;" onchange="saveCobParams()"> % de lo atrasado</label>
+        <label style="font-size:12.5px;color:var(--ink-300);display:flex;gap:6px;align-items:center;">y <input type="number" id="cob-pct-plazo" min="0" max="100" style="width:70px;" onchange="saveCobParams()"> % de lo que vence a término</label>
+      </div>
+      <div class="stat-grid" id="cob-est-summary"></div>
+      <div class="ledger" style="margin-bottom:12px;"><table class="ltable" id="cob-est-vendedores"></table></div>
+      <div class="section-title" style="margin-top:6px;">Estimación semanal (próximas 5 semanas)</div>
+      <div class="ledger" style="margin-bottom:8px;"><table class="ltable" id="cob-est-semanas"></table></div>
+
+    </div>
+
+    <div class="panel" id="panel-cobsup">
+      <div class="toolbar"><h2>Supervisores y vendedores</h2></div>
+      <p class="modal-sub" style="margin-top:-4px;">Asigná cada vendedor a su supervisor para ver las cobranzas y la estimación por zona. La asignación se guarda y se sincroniza con el resto de los equipos.</p>
+      <div class="section-title">Resumen por supervisor</div>
+      <p class="modal-sub" style="margin-top:-4px;">Hacé clic en un supervisor para ver sus cobranzas.</p>
+      <div class="ledger" style="margin-bottom:14px;"><table class="ltable" id="cs-resumen"></table></div>
+      <div class="section-title">Supervisores</div>
+      <div class="filter-row">
+        <input type="text" id="cs-new" placeholder="Nombre del supervisor" onkeydown="if(event.key==='Enter'){cobAddSup();}">
+        <button class="btn-primary btn-small" onclick="cobAddSup()">+ Agregar supervisor</button>
+      </div>
+      <div class="ledger" style="margin-bottom:14px;"><table class="ltable" id="cs-sups"></table></div>
+      <div class="section-title">Asignar vendedores a cada supervisor</div>
+      <div class="filter-row">
+        <span style="font-size:12.5px;color:var(--ink-300);">Asignar todos los que no tienen supervisor a</span>
+        <select id="cs-bulk-sup"></select>
+        <button class="btn-ghost btn-small" onclick="cobAssignBulk()">Aplicar</button>
+        <span class="pill" id="cs-bulk-info"></span>
+      </div>
+      <div class="ledger" style="margin-bottom:14px;"><table class="ltable" id="cs-vendedores"></table></div>
+      <div class="section-title">Clientes internos (sus facturas no se cargan)</div>
+      <p class="modal-sub" style="margin-top:-4px;">Facturas de vendedores o empleados que el sistema incluye en el reporte. Se ignoran en cada importación. Con el botón 🚫 de la tabla de cobranzas agregás más.</p>
+      <div class="ledger"><table class="ltable" id="cs-clientes"></table></div>
+    </div>
+
+    <div class="panel" id="panel-ventas">
+      <div class="toolbar"><h2>Ventas</h2></div>
+      <div class="empty"><b>Esta sección está preparada y todavía sin contenido</b>Cuando definamos qué querés ver acá (por ejemplo ventas por vendedor, por marca o por mes), se agrega sin tocar las otras áreas.</div>
+    </div>
+
+    <div class="panel" id="panel-resumen">
+      <div class="toolbar"><h2>Resumen del día</h2><span class="pill" id="res-fecha"></span></div>
+      <div class="stat-grid" id="res-summary"></div>
+      <div class="section-title">Para pagar hoy</div>
+      <div class="ledger" style="margin-bottom:8px;"><table class="ltable" id="res-hoy"></table></div>
+      <div class="section-title">Cobranzas vencidas por vendedor</div>
+      <div class="ledger"><table class="ltable" id="res-cob"></table></div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: cobranza (alta / edición) -->
+<div class="overlay" id="cob-overlay">
+  <div class="modal">
+    <h3 id="cob-modal-title">Nueva cobranza</h3>
+    <p class="modal-sub">Lo que un cliente le debe a la empresa, asignado a un vendedor.</p>
+    <form id="cob-form" onsubmit="return saveCob(event)" novalidate>
+      <input type="hidden" id="cb-id">
+      <div class="field-grid">
+        <div class="field"><label>Cliente</label><input type="text" id="cb-cliente" required></div>
+        <div class="field"><label>Vendedor</label><input type="text" id="cb-vendedor" list="vendedores-list" placeholder="Ej: Juan Pérez"></div>
+        <div class="field"><label>Documento / factura</label><input type="text" id="cb-documento" placeholder="Ej: 001-001-0001234"></div>
+        <div class="field"><label>Fecha de emisión (opcional)</label><input type="date" id="cb-emision"></div>
+        <div class="field"><label>Vencimiento</label><input type="date" id="cb-vencimiento" required></div>
+        <div class="field"><label>Monto total (Gs.)</label><input type="number" id="cb-monto" min="0" step="1" required></div>
+        <div class="field"><label>Ya cobrado (Gs.)</label><input type="number" id="cb-cobrado" min="0" step="1" value="0"></div>
+        <div class="field full"><label>Nota (opcional)</label><input type="text" id="cb-nota" placeholder="Ej: prometió pagar el viernes"></div>
+      </div>
+      <datalist id="vendedores-list"></datalist>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" onclick="closeCobModal()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="saveCob(event)">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: cobro parcial -->
+<div class="overlay" id="cobpar-overlay">
+  <div class="modal">
+    <h3>Registrar cobro</h3>
+    <p class="modal-sub" id="cobpar-sub"></p>
+    <div class="field"><label>Monto cobrado ahora (Gs.)</label><input type="number" id="cobpar-monto" min="0" step="1"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeCobParcial()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmarCobParcial()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: importar cobranzas desde Excel -->
+<div class="overlay" id="cobimp-overlay">
+  <div class="modal wide">
+    <h3>Importar cobranzas desde Excel</h3>
+    <p class="modal-sub">Detectamos las columnas del archivo. Revisá que coincidan antes de importar. Si un documento ya estaba cargado, se actualiza su saldo y vencimiento.</p>
+    <div class="field-grid">
+      <div class="field"><label>Hoja del Excel</label><select id="ci-sheet" onchange="onCobSheetChange()"></select></div>
+      <div class="field"><label>Columna: Cliente</label><select id="ci-col-cliente" onchange="refreshCobPreview()"></select></div>
+      <div class="field"><label>Columna: Vendedor</label><select id="ci-col-vendedor" onchange="refreshCobPreview()"></select></div>
+      <div class="field"><label>Columna: Documento / factura</label><select id="ci-col-documento" onchange="refreshCobPreview()"></select></div>
+      <div class="field"><label>Columna: Vencimiento</label><select id="ci-col-vencimiento" onchange="refreshCobPreview()"></select></div>
+      <div class="field"><label>Columna: Saldo / monto a cobrar</label><select id="ci-col-monto" onchange="refreshCobPreview()"></select></div>
+      <div class="field"><label>Columna: Fecha de emisión (opcional)</label><select id="ci-col-emision" onchange="refreshCobPreview()"></select></div>
+      <div class="field"><label>Columna: Monto original de la factura (opcional)</label><select id="ci-col-total" onchange="refreshCobPreview()"></select></div>
+    </div>
+    <div class="field-grid" style="margin-bottom:8px;">
+      <div class="field"><label>El reporte llega hasta (fecha de vencimiento)</label><input type="date" id="ci-hasta"></div>
+    </div>
+    <div id="cobimp-groups-wrap" style="display:none;">
+      <div class="section-title" style="margin-top:6px;">¿De qué vendedores querés cargar las cobranzas?</div>
+      <p class="modal-sub" id="cobimp-grouped-note" style="margin-top:-4px;"></p>
+      <div class="filter-row">
+        <button type="button" class="btn-ghost btn-small" onclick="cobSelAll('all')">Marcar todos</button>
+        <button type="button" class="btn-ghost btn-small" onclick="cobSelAll('none')">Desmarcar todos</button>
+        <button type="button" class="btn-ghost btn-small" onclick="cobSelAll('sug')">Sugeridos</button>
+      </div>
+      <div class="ledger" style="margin-bottom:12px;max-height:300px;overflow:auto;"><table class="ltable" id="cobimp-groups"></table></div>
+      <div id="cobimp-cli-wrap" style="display:none;">
+        <div class="section-title" style="margin-top:6px;">Facturas internas (clientes que son vendedores o empleados)</div>
+        <p class="modal-sub" id="cobimp-cli-note" style="margin-top:-4px;">Estas facturas no se cargan. Desmarcá la casilla si alguna sí es de un cliente real. Se recuerda para los próximos reportes.</p>
+        <div class="ledger" style="max-height:220px;overflow:auto;margin-bottom:12px;"><table class="ltable" id="cobimp-cli"></table></div>
+      </div>
+      <label id="ci-quitar-wrap" style="display:none;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink-300);margin:4px 0 10px;">
+        <input type="checkbox" id="ci-quitar" checked style="margin-top:3px;">
+        <span id="ci-quitar-txt"></span>
+      </label>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink-300);margin:4px 0 14px;">
+      <input type="checkbox" id="ci-cerrar" style="margin-top:3px;">
+      <span>Marcar como cobradas las facturas pendientes que ya no figuran en este reporte (solo de los vendedores marcados y con vencimiento hasta la fecha del reporte, porque las posteriores no vienen en el archivo).</span>
+    </label>
+    <div class="section-title" style="margin-top:6px;">Vista previa (primeras filas)</div>
+    <div class="ledger" style="margin-bottom:16px;"><table class="ltable" id="cobimp-preview"></table></div>
+    <div class="modal-actions spread">
+      <span class="pill" id="cobimp-count">0 filas</span>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn-ghost" onclick="closeCobImport()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="confirmCobImport()">Importar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -346,7 +662,7 @@
       </div>
       <div class="field"><label>Hoja del Excel</label><select id="si-sheet" onchange="onSmartSheetChange()"></select></div>
     </div>
-    <div id="si-mida-note" style="display:none;background:var(--sage-dim);border:1px solid var(--sage);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:#a9d3b5;">
+    <div id="si-mida-note" style="display:none;background:var(--sage-dim);border:1px solid var(--sage);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:#1d7a4a;">
       ✓ Se detectó un reporte de cheques agrupado por cuenta bancaria (formato tipo MIDA). El banco, proveedor, N° de cheque, concepto, fecha de pago y monto se extrajeron automáticamente.
     </div>
     <div class="field-grid" id="si-generic-fields">
@@ -357,6 +673,7 @@
       <div class="field"><label>Columna: N° de cheque (opcional)</label><select id="si-col-numero" onchange="refreshCurrentPreview()"></select></div>
       <div class="field"><label>Columna: Monto ya pagado (opcional)</label><select id="si-col-pago" onchange="refreshCurrentPreview()"></select></div>
       <div class="field"><label>Columna: Descontado en banco (opcional)</label><select id="si-col-descuento" onchange="refreshCurrentPreview()"></select></div>
+      <div class="field"><label>Columna: Marca (opcional)</label><select id="si-col-marca" onchange="refreshCurrentPreview()"></select></div>
     </div>
     <div class="section-title" style="margin-top:6px;">Vista previa (primeras filas)</div>
     <div class="ledger" style="margin-bottom:16px;"><table class="ltable" id="smart-preview-table"></table></div>
@@ -445,6 +762,11 @@
           <input type="text" id="p-concepto" placeholder="Ej: Cheque N° 001-2345, factura, alquiler oficina...">
         </div>
         <div class="field">
+          <label>Marca (opcional)</label>
+          <input type="text" id="p-marca" list="marcas-list" placeholder="Ej: Nestlé">
+          <datalist id="marcas-list"></datalist>
+        </div>
+        <div class="field">
           <label>Monto (Gs.)</label>
           <input type="number" id="p-monto" min="0" step="1" required>
         </div>
@@ -499,7 +821,7 @@
     <form id="income-form" onsubmit="return saveIncome(event)" novalidate>
       <input type="hidden" id="inc-month">
       <div class="field full">
-        <label>Ingreso estimado / real (Gs.)</label>
+        <label>Otros ingresos del mes, sin contar cobranzas (Gs.)</label>
         <input type="number" id="inc-monto" min="0" step="1" required>
       </div>
       <div class="modal-actions">
@@ -707,6 +1029,10 @@ const STORAGE_KEY = 'dyf-loans-v2';
 const INCOME_KEY = 'dyf-incomes-v1';
 const PAGOS_KEY = 'dyf-pagos-v1';
 const BACKUP_DATE_KEY = 'dyf-lastbackup-v1';
+const COBRANZAS_KEY = 'dyf-cobranzas-v1';
+const COBPARAMS_KEY = 'dyf-cobparams-v1';
+const COBCONFIG_KEY = 'dyf-cobconfig-v1';
+const COMPANY_NAME = 'DYF Group';
 const SYNC_CONFIG_KEY = 'dyf-sync-config-v1';
 let supabaseClient = null;
 let supabaseConfig = { url:'', key:'', workspace:'' };
@@ -715,6 +1041,17 @@ let applyingRemoteUpdate = false;
 let loans = [];
 let incomes = {};
 let pagos = [];
+let cobranzas = [];
+const DEFAULT_SUPS = ['Alfredo Gonzalez','Cristian Acevedo','Daisy Irala'];
+let cobConfig = {sups:DEFAULT_SUPS.slice(), asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
+function normalizeCobConfig(o){
+  const c = {sups:[], asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
+  if(o){ if(o.link===false) c.link = false; if(typeof o.repHasta==='string') c.repHasta = o.repHasta; }
+  if(o && Array.isArray(o.sups)) c.sups = o.sups.filter(function(x){ return typeof x==='string' && x.trim(); }).map(function(x){ return x.trim(); });
+  else c.sups = DEFAULT_SUPS.slice();
+  ['asg','excl','names','cliExcl'].forEach(function(k){ if(o && o[k] && typeof o[k]==='object' && !Array.isArray(o[k])) c[k] = o[k]; });
+  return c;
+}
 let activeTab = 'priority';
 let activeLoanId = null;
 let editingCuotaId = null;
@@ -792,10 +1129,20 @@ function loadLoans(){
     const rawPag = localStorage.getItem(PAGOS_KEY);
     pagos = rawPag ? JSON.parse(rawPag) : [];
   }catch(e){ pagos = []; }
+  try{
+    const rawCob = localStorage.getItem(COBRANZAS_KEY);
+    cobranzas = rawCob ? JSON.parse(rawCob) : [];
+  }catch(e){ cobranzas = []; }
+  try{
+    const rawCfg = localStorage.getItem(COBCONFIG_KEY);
+    cobConfig = normalizeCobConfig(rawCfg ? JSON.parse(rawCfg) : null);
+  }catch(e){ cobConfig = normalizeCobConfig(null); }
   if(repairDuplicateCuotaIds()) persist();
   if(repairDuplicatePagoIds()) persistPagos();
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  const hashSec = (location.hash||'').replace('#','');
+  if(SECTIONS[hashSec]) openSection(hashSec); else goHome();
   renderAll();
   updateSyncStatusLabel();
   initSyncFromSavedConfig().then(function(){
@@ -806,6 +1153,16 @@ function loadLoans(){
 function persistIncomes(){
   try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }
   catch(e){ console.error('No se pudo guardar ingresos', e); }
+  pushToSupabase();
+}
+function persistCobranzas(){
+  try{ localStorage.setItem(COBRANZAS_KEY, JSON.stringify(cobranzas)); }
+  catch(e){ console.error('No se pudo guardar cobranzas', e); }
+  pushToSupabase();
+}
+function persistCobConfig(){
+  try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }
+  catch(e){ console.error('No se pudo guardar la configuración de cobranzas', e); }
   pushToSupabase();
 }
 function persistPagos(){
@@ -824,9 +1181,11 @@ function saveSyncConfigLocal(){
   try{ localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(supabaseConfig)); }catch(e){}
 }
 function updateSyncStatusLabel(){
-  const label = document.getElementById('sync-status-label');
-  if(!label) return;
-  label.textContent = syncEnabled ? 'Sincronizado ('+supabaseConfig.workspace+')' : 'Sincronización';
+  const txt = syncEnabled ? 'Sincronizado ('+supabaseConfig.workspace+')' : 'Sincronización';
+  ['sync-status-label','sync-status-label2'].forEach(function(id){
+    const label = document.getElementById(id);
+    if(label) label.textContent = txt;
+  });
 }
 async function initSyncFromSavedConfig(){
   loadSyncConfig();
@@ -841,9 +1200,12 @@ async function initSyncFromSavedConfig(){
       loans = remote.loans || [];
       incomes = remote.incomes || {};
       pagos = remote.pagos || [];
+      if(Array.isArray(remote.cobranzas)) cobranzas = remote.cobranzas;
+      if(remote.cobConfig && typeof remote.cobConfig==='object'){ cobConfig = normalizeCobConfig(remote.cobConfig); try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }catch(e){} }
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
       try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
       try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }catch(e){}
+      try{ localStorage.setItem(COBRANZAS_KEY, JSON.stringify(cobranzas)); }catch(e){}
       applyingRemoteUpdate = false;
     }
     subscribeRealtime();
@@ -870,7 +1232,7 @@ function pushToSupabase(){
   clearTimeout(pushDebounceTimer);
   pushDebounceTimer = setTimeout(async function(){
     try{
-      const payload = { loans: loans, incomes: incomes, pagos: pagos };
+      const payload = { loans: loans, incomes: incomes, pagos: pagos, cobranzas: cobranzas, cobConfig: cobConfig };
       const res = await supabaseClient.from('app_state').upsert({ id: supabaseConfig.workspace, data: payload, updated_at: new Date().toISOString() });
       if(res.error) throw res.error;
     }catch(e){
@@ -887,9 +1249,12 @@ function subscribeRealtime(){
         loans = payload.new.data.loans || [];
         incomes = payload.new.data.incomes || {};
         pagos = payload.new.data.pagos || [];
+        if(Array.isArray(payload.new.data.cobranzas)) cobranzas = payload.new.data.cobranzas;
+        if(payload.new.data.cobConfig && typeof payload.new.data.cobConfig==='object'){ cobConfig = normalizeCobConfig(payload.new.data.cobConfig); try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }catch(e){} }
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
         try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
         try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }catch(e){}
+        try{ localStorage.setItem(COBRANZAS_KEY, JSON.stringify(cobranzas)); }catch(e){}
         renderAll();
         applyingRemoteUpdate = false;
       }
@@ -980,7 +1345,7 @@ function persist(){
   pushToSupabase();
 }
 function exportBackup(){
-  const payload = {loans:loans, incomes:incomes, pagos:pagos};
+  const payload = {loans:loans, incomes:incomes, pagos:pagos, cobranzas:cobranzas, cobConfig:cobConfig};
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1003,23 +1368,27 @@ function importBackup(e){
   reader.onload = function(ev){
     try{
       const data = JSON.parse(ev.target.result);
-      let newLoans, newIncomes, newPagos;
+      let newLoans, newIncomes, newPagos, newCobranzas = null, newCobConfig = null;
       if(Array.isArray(data)){
         // formato viejo: solo el array de préstamos
         newLoans = data; newIncomes = {}; newPagos = [];
       }else if(data && Array.isArray(data.loans)){
         newLoans = data.loans; newIncomes = data.incomes||{}; newPagos = data.pagos||[];
+        if(Array.isArray(data.cobranzas)) newCobranzas = data.cobranzas;
+        if(data.cobConfig && typeof data.cobConfig==='object') newCobConfig = data.cobConfig;
       }else{
         throw new Error('Formato inválido');
       }
       function applyImport(){
         loans = newLoans; incomes = newIncomes; pagos = newPagos;
-        persist(); persistIncomes(); persistPagos();
+        if(newCobranzas) cobranzas = newCobranzas;
+        if(newCobConfig) cobConfig = normalizeCobConfig(newCobConfig);
+        persist(); persistIncomes(); persistPagos(); persistCobranzas(); persistCobConfig();
         renderAll();
         appAlert('Copia de seguridad importada correctamente.');
       }
-      if(loans.length>0 || pagos.length>0){
-        appConfirm('Esto va a reemplazar los datos cargados actualmente (préstamos, ingresos y pagos) por los del archivo importado. ¿Continuar?', applyImport);
+      if(loans.length>0 || pagos.length>0 || cobranzas.length>0){
+        appConfirm('Esto va a reemplazar los datos cargados actualmente (préstamos, ingresos, pagos y cobranzas) por los del archivo importado. ¿Continuar?', applyImport);
       }else{
         applyImport();
       }
@@ -1091,7 +1460,7 @@ function handleExcelImport(e){
   reader.onload = function(ev){
     try{
       const data = new Uint8Array(ev.target.result);
-      const wb = XLSX.read(data, {type:'array'});
+      const wb = readWorkbookSmart(data);
       let addedLoans=0, addedCuotasManual=0, addedCuotasAuto=0, addedPagos=0;
 
       // 1) leer cuotas manuales primero, agrupadas por N° de operación
@@ -1203,8 +1572,45 @@ const SMART_ALIASES = {
   monto: ['monto','importe','valor','monto del cheque','monto cheque','total','importe cheque'],
   numero: ['numero','nro cheque','n cheque','no cheque','nro de cheque','n de cheque','numero de cheque','num cheque','numero cheque','cheque n','cheque nro','cheque numero','nro','num','cheque'],
   pago: ['pago','pagado','pagos','abonado','monto pagado','importe pagado','cobrado','cancelado'],
+  marca: ['marca','marcas','marca proveedor','marca del proveedor','brand'],
   descuento: ['descuento en banco','descontado en','descontado en banco','banco descuento','banco de descuento','descuento','descontado','banco de descontado']
 };
+/* ---------- lectura robusta de Excel (.xls con tabla de hojas dañada) ---------- */
+function repairXlsSheetOffsets(u8){
+  const cfb = XLSX.CFB.read(u8,{type:'array'});
+  const ent = XLSX.CFB.find(cfb,'/Workbook') || XLSX.CFB.find(cfb,'/Book');
+  if(!ent || !ent.content) return null;
+  const d = new Uint8Array(ent.content);
+  const dv = new DataView(d.buffer, d.byteOffset, d.byteLength);
+  let pos = 0; const sheetBofs = [], bounds = [];
+  while(pos+4<=d.length){
+    const t = dv.getUint16(pos,true), l = dv.getUint16(pos+2,true);
+    if(t===0x0809 && pos+8<=d.length && dv.getUint16(pos+6,true)===0x0010) sheetBofs.push(pos);
+    if(t===0x0085 && l>=8) bounds.push(pos);
+    pos += 4+l;
+  }
+  const ws = bounds.filter(function(p){ return d[p+9]===0; });
+  if(ws.length===0 || sheetBofs.length<ws.length) return null;
+  let changed = false;
+  ws.forEach(function(p,i){ if(dv.getUint32(p+4,true)!==sheetBofs[i]){ dv.setUint32(p+4, sheetBofs[i], true); changed = true; } });
+  if(!changed) return null;
+  ent.content = d;
+  return XLSX.CFB.write(cfb,{type:'array'});
+}
+function readWorkbookSmart(u8){
+  const ok = function(w){ return !!(w && w.SheetNames && w.SheetNames.some(function(n){ return !!w.Sheets[n]; })); };
+  let wb = null;
+  try{ wb = XLSX.read(u8, {type:'array'}); }catch(e){ wb = null; }
+  if(ok(wb)) return wb;
+  try{
+    const fixed = repairXlsSheetOffsets(u8);
+    if(fixed){
+      const w2 = XLSX.read(new Uint8Array(fixed), {type:'array'});
+      if(ok(w2)) return w2;
+    }
+  }catch(e){ console.error('No se pudo reparar el .xls', e); }
+  return wb;
+}
 function normalizeHeader(s){
   return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
 }
@@ -1273,11 +1679,12 @@ function detectSmartColumns(headers, rows){
   const idxMonto = take('monto');
   const idxDescuento = take('descuento');
   const idxPago = take('pago',{exactOnly:true});
+  const idxMarca = take('marca');
   const idxBanco = take('banco');
   const idxEntidad = take('entidad');
   let idxNumero = take('numero');
   if(idxNumero<0){ idxNumero = sniffNumeroColumn(rows, headers.length, used); if(idxNumero>=0) used.push(idxNumero); }
-  return {fecha:idxFecha, monto:idxMonto, descuento:idxDescuento, pago:idxPago, banco:idxBanco, entidad:idxEntidad, numero:idxNumero};
+  return {fecha:idxFecha, monto:idxMonto, descuento:idxDescuento, pago:idxPago, marca:idxMarca, banco:idxBanco, entidad:idxEntidad, numero:idxNumero};
 }
 function cleanNumber(val){
   if(typeof val === 'number') return val;
@@ -1306,6 +1713,7 @@ function parseMidaChequeReport(aoa){
       col.fecha = row.indexOf('fecha');
       col.fecPago = row.findIndex(function(c){ return c.indexOf('pago')!==-1; });
       col.monto = row.findIndex(function(c){ return c.indexOf('monto')!==-1; });
+      col.marca = row.findIndex(function(c){ return c.indexOf('marca')!==-1; });
       break;
     }
   }
@@ -1325,6 +1733,7 @@ function parseMidaChequeReport(aoa){
       col.fecha = row.indexOf('fecha');
       col.fecPago = row.findIndex(function(c){ return c.indexOf('pago')!==-1; });
       col.monto = idxMonto;
+      col.marca = row.findIndex(function(c){ return c.indexOf('marca')!==-1; });
       break;
     }
   }
@@ -1359,6 +1768,7 @@ function parseMidaChequeReport(aoa){
       cheque: chequeVal,
       concepto: conceptoTxt,
       fecha: toISODate(fechaRaw, true),
+      marca: (col.marca>=0 ? String(row[col.marca]==null?'':row[col.marca]).trim() : ''),
       monto: cleanNumber(row[col.monto])
     });
   }
@@ -1378,7 +1788,7 @@ function handleSmartExcelSelect(e){
   reader.onload = function(ev){
     try{
       const data = new Uint8Array(ev.target.result);
-      smartWorkbook = XLSX.read(data, {type:'array'});
+      smartWorkbook = readWorkbookSmart(data);
       const validSheetNames = smartWorkbook.SheetNames.filter(function(n){ return !!smartWorkbook.Sheets[n]; });
       if(validSheetNames.length===0){
         appAlert('El archivo no tiene ninguna hoja legible. Verificá que sea un Excel válido.');
@@ -1453,6 +1863,7 @@ function onSmartSheetChange(){
     fillSelect('si-col-numero', idxNumero, true);
     fillSelect('si-col-pago', det.pago, true);
     fillSelect('si-col-descuento', det.descuento, true);
+    fillSelect('si-col-marca', det.marca, true);
   }
   refreshCurrentPreview();
 }
@@ -1483,7 +1894,7 @@ function renderMidaPreview(){
 function smartCols(){
   function v(id){ const el=document.getElementById(id); return el ? parseInt(el.value,10) : -1; }
   return {banco:v('si-col-banco'), entidad:v('si-col-entidad'), fecha:v('si-col-fecha'), monto:v('si-col-monto'),
-          numero:v('si-col-numero'), pago:v('si-col-pago'), descuento:v('si-col-descuento')};
+          numero:v('si-col-numero'), pago:v('si-col-pago'), descuento:v('si-col-descuento'), marca:v('si-col-marca')};
 }
 /* Convierte las filas del Excel en pagos. No pierde ninguna fila con monto y fecha:
    - sin proveedor/librador usa el banco o el N° de cheque como nombre
@@ -1498,6 +1909,7 @@ function buildPagosFromRows(rows, rowNums, cols, tipo){
     const banco = String(cell(row,cols.banco)==null?'':cell(row,cols.banco)).trim();
     const numeroCheque = String(cell(row,cols.numero)==null?'':cell(row,cols.numero)).trim().replace(/\.0+$/,'');
     const descuento = String(cell(row,cols.descuento)==null?'':cell(row,cols.descuento)).trim();
+    const marca = cols.marca>=0 ? String(cell(row,cols.marca)==null?'':cell(row,cols.marca)).trim() : '';
     const monto = cleanNumber(cell(row,cols.monto));
     const fecha = toISODate(cell(row,cols.fecha));
     let pagado = cols.pago>=0 ? cleanNumber(cell(row,cols.pago)) : 0;
@@ -1512,7 +1924,7 @@ function buildPagosFromRows(rows, rowNums, cols, tipo){
     if(numeroCheque) conceptoParts.push('Cheque N° '+numeroCheque);
     if(descuento) conceptoParts.push('Descontado en: '+descuento);
     const concepto = conceptoParts.join(' · ');
-    const base = {tipo:tipo, entidad:entidad, fecha:fecha};
+    const base = {tipo:tipo, entidad:entidad, fecha:fecha, marca:marca};
     const claves = [pagoDedupeKey({tipo:tipo, entidad:entidad, concepto:concepto, monto:monto, fecha:fecha})];
     if(pagado>=monto){
       out.pagos.push({reg:Object.assign({id:uid('p'), concepto:concepto, monto:monto, estado:'Pagada'}, base), claves:claves});
@@ -1536,10 +1948,11 @@ function refreshSmartPreview(){
   if(preview.length===0){
     table.innerHTML = '<tr><td class="empty" style="border:none;">La hoja no tiene filas de datos.</td></tr>';
   }else{
-    table.innerHTML = '<tr><th>Banco</th><th>Proveedor / entidad</th><th>N° Cheque</th><th>Fecha</th><th class="mono">Monto</th><th class="mono">Pagado</th><th>Descontado en</th></tr>' +
+    table.innerHTML = '<tr><th>Banco</th><th>Marca</th><th>Proveedor / entidad</th><th>N° Cheque</th><th>Fecha</th><th class="mono">Monto</th><th class="mono">Pagado</th><th>Descontado en</th></tr>' +
       preview.map(function(row){
         return '<tr>' +
           '<td>'+escapeHtml(cols.banco>=0 ? row[cols.banco] : '—')+'</td>' +
+          '<td>'+escapeHtml(cols.marca>=0 ? (row[cols.marca]||'') : '—')+'</td>' +
           '<td>'+escapeHtml(cols.entidad>=0 ? (row[cols.entidad]||'') : '')+'</td>' +
           '<td class="mono">'+escapeHtml(cols.numero>=0 ? row[cols.numero] : '—')+'</td>' +
           '<td class="mono">'+formatDate(toISODate(cols.fecha>=0 ? row[cols.fecha] : ''))+'</td>' +
@@ -1570,7 +1983,12 @@ function confirmSmartImport(){
   const tipo = document.getElementById('si-tipo').value;
   let added=0, skipped=0, duplicados=0, omitidas=[];
   const existingKeys = {};
-  pagos.forEach(function(p){ existingKeys[pagoDedupeKey(p)] = true; });
+  const existingByKey = {};
+  let marcasActualizadas = 0;
+  function backfillMarca(ex, marca){
+    if(ex && marca && !ex.marca){ ex.marca = marca; marcasActualizadas++; }
+  }
+  pagos.forEach(function(p){ const k = pagoDedupeKey(p); existingKeys[k] = true; existingByKey[k] = p; });
 
   if(smartModeIsMida){
     midaParsedRows.forEach(function(r){
@@ -1582,11 +2000,12 @@ function confirmSmartImport(){
       const nuevoPago = {
         id: uid('p'), tipo: tipo, entidad: r.proveedor,
         concepto: conceptoParts.join(' · '),
-        monto: r.monto, fecha: r.fecha, estado: 'Pendiente'
+        monto: r.monto, fecha: r.fecha, estado: 'Pendiente', marca: r.marca||''
       };
       const key = pagoDedupeKey(nuevoPago);
-      if(existingKeys[key]){ duplicados++; return; }
+      if(existingKeys[key]){ duplicados++; backfillMarca(existingByKey[key], r.marca); return; }
       existingKeys[key] = true;
+      existingByKey[key] = nuevoPago;
       pagos.push(nuevoPago);
       added++;
     });
@@ -1595,8 +2014,13 @@ function confirmSmartImport(){
     omitidas = res.omitidas;
     res.pagos.forEach(function(item){
       const dup = item.claves.some(function(k){ return existingKeys[k]; });
-      if(dup){ if(!item.parteDe) duplicados++; return; }
-      item.claves.forEach(function(k){ existingKeys[k]=true; });
+      if(dup){
+        if(!item.parteDe) duplicados++;
+        const kex = item.claves.filter(function(k){ return existingByKey[k]; })[0];
+        if(kex) backfillMarca(existingByKey[kex], item.reg.marca);
+        return;
+      }
+      item.claves.forEach(function(k){ existingKeys[k]=true; existingByKey[k]=item.reg; });
       pagos.push(item.reg);
       added++;
     });
@@ -1607,6 +2031,7 @@ function confirmSmartImport(){
   renderAll();
   let msg = 'Importación completa: '+added+' cheque(s)/pago(s) nuevo(s) agregado(s) como "'+pagoTipoLabel(tipo)+'".';
   if(duplicados>0) msg += '\n'+duplicados+' ya estaban cargados (mismo tipo, entidad, monto, fecha y concepto) y se omitieron para no duplicar.';
+  if(marcasActualizadas>0) msg += '\n'+marcasActualizadas+' cheque(s) que ya estaban cargados recibieron su marca.';
   if(skipped>0){
     msg += '\n'+skipped+' fila(s) no se importaron:';
     omitidas.slice(0,12).forEach(function(o){ msg += '\n · Fila '+o.fila+' del Excel: '+o.motivo+(o.detalle?' ('+o.detalle+')':''); });
@@ -1700,7 +2125,9 @@ function byMonth(){
   });
   const rows = Object.values(map).sort(function(a,b){ return a.key.localeCompare(b.key); });
   rows.forEach(function(r){
-    r.ingreso = incomes[r.key] || 0;
+    r.ingresoManual = incomes[r.key] || 0;
+    r.cobEst = cobLinkedIncome(r.key);
+    r.ingreso = r.ingresoManual + r.cobEst;
     r.neto = r.ingreso - r.total;
   });
   return rows;
@@ -1831,7 +2258,21 @@ function renderStats(){
       '<div class="stat-label">Cuotas vencidas / por vencer</div>' +
       '<div class="stat-value">'+(s.vencidas + s.porVencer)+'</div>' +
       '<div class="stat-sub">'+s.vencidas+' vencidas · '+s.porVencer+' en 7 días</div>' +
-    '</div>';
+    '</div>' +
+    (function(){
+      const m = proyeccionFlujoCaja(1)[0];
+      const col = m.neto<0 ? 'var(--clay)' : 'var(--sage)';
+      return '<div class="stat">' +
+        '<div class="stat-label">Ingresos esperados del mes</div>' +
+        '<div class="stat-value">'+money(m.ingreso)+'</div>' +
+        '<div class="stat-sub">Cobranzas '+money(m.cobranzas)+' · otros '+money(m.otros)+'</div>' +
+      '</div>' +
+      '<div class="stat">' +
+        '<div class="stat-label">Ingresos menos pagos del mes</div>' +
+        '<div class="stat-value" style="color:'+col+';">'+money(m.neto)+'</div>' +
+        '<div class="stat-sub">A pagar este mes: '+money(m.obligaciones)+'</div>' +
+      '</div>';
+    })();
 }
 function renderBackupReminder(){
   const container = document.getElementById('backup-reminder-container');
@@ -1847,28 +2288,13 @@ function renderBackupReminder(){
     ? 'Hace '+dias+' días que no exportás una copia de seguridad.'
     : 'Todavía no exportaste ninguna copia de seguridad.';
   container.innerHTML = '<div class="banner" style="background:var(--amber-dim);border-color:var(--amber);">' +
-    '<div class="banner-title" style="color:#e8bd82;">⚠ '+msg+'</div>' +
-    '<button class="btn-ghost btn-small" style="border-color:var(--amber);color:#e8bd82;" onclick="exportBackup()">Exportar ahora</button>' +
+    '<div class="banner-title" style="color:#8a5a00;">⚠ '+msg+'</div>' +
+    '<button class="btn-ghost btn-small" style="border-color:var(--amber);color:#8a5a00;" onclick="exportBackup()">Exportar ahora</button>' +
   '</div>';
 }
 function renderBanner(){
-  const alerts = [];
-  loans.forEach(function(l){
-    l.cuotas.forEach(function(c){
-      if(c.estado!=='Pendiente') return;
-      const d = daysUntil(c.fecha);
-      if(d<0 || d<=7) alerts.push({loan:l, cuota:c, d:d});
-    });
-  });
-  const bannerC = document.getElementById('banner-container');
-  if(alerts.length===0){ bannerC.innerHTML=''; return; }
-  alerts.sort(function(a,b){ return a.d-b.d; });
-  let items='';
-  alerts.forEach(function(a){
-    const txt = a.d<0 ? (escapeHtml(a.loan.banco)+' cuota N°'+a.cuota.numero+' · '+Math.abs(a.d)+'d vencida') : (escapeHtml(a.loan.banco)+' cuota N°'+a.cuota.numero+' · vence en '+a.d+'d');
-    items += '<span>'+txt+'</span>';
-  });
-  bannerC.innerHTML = '<div class="banner"><div class="banner-title">⚠ Cuotas que requieren atención</div><div class="banner-items">'+items+'</div></div>';
+  // Se quitó el cartel de cuotas: el detalle está en Flujo de caja (Prioridad) y en la tarjeta de cuotas vencidas.
+  document.getElementById('banner-container').innerHTML = '';
 }
 
 /* ---------- render: tabs ---------- */
@@ -1887,6 +2313,12 @@ function renderActivePanel(){
   else if(activeTab==='bank') renderBankTab();
   else if(activeTab==='month') renderMonthTab();
   else if(activeTab==='stats') renderStatsTab();
+  else if(activeTab==='deudames') renderDeudaMesTab();
+  else if(activeTab==='gastos') renderGastosTab();
+  else if(activeTab==='cobranzas') renderCobranzasTab();
+  else if(activeTab==='cobest') renderCobEstimacion();
+  else if(activeTab==='cobsup') renderCobSupTab();
+  else if(activeTab==='resumen') renderResumenTab();
 }
 
 function renderPriorityTab(){
@@ -2233,16 +2665,27 @@ function toggleBankExpand(banco){
   renderBankTab();
 }
 
+function cobLinkedIncome(key){
+  if(!cobConfig.link || cobranzas.length===0) return 0;
+  const e = cobEstimate(key);
+  return e ? Math.round(e.total) : 0;
+}
+function cobSetLink(v){ cobConfig.link = !!v; persistCobConfig(); renderAll(); }
+function cobSetHasta(v){ cobConfig.repHasta = v || ''; persistCobConfig(); renderAll(); }
 function renderMonthTab(){
+  const lk = document.getElementById('month-link');
+  lk.checked = !!cobConfig.link;
+  document.getElementById('month-link-info').textContent = cobranzas.length===0 ? '(todavía no hay cobranzas cargadas)' :
+    (cobConfig.repHasta ? '· reporte de cobranzas cargado hasta el '+formatDate(cobConfig.repHasta)+': lo que venza después todavía no está incluido' : '· indicá hasta qué fecha llega el reporte en Cobranzas › Estimación de ingresos');
   const rows = byMonth();
   const table = document.getElementById('month-table');
   if(rows.length===0){
     table.innerHTML = '<tr><td class="empty" style="border:none;">No hay cuotas pendientes cargadas todavía.</td></tr>';
     return;
   }
-  let totalCapital=0, totalInteres=0, totalGastos=0, totalTotal=0, totalIngreso=0, totalNeto=0;
+  let tc=0, ti=0, tg=0, tt=0, tm=0, tce=0, tin=0, tn=0;
   const body = rows.map(function(r){
-    totalCapital+=r.capital; totalInteres+=r.interes; totalGastos+=r.gastos; totalTotal+=r.total; totalIngreso+=r.ingreso; totalNeto+=r.neto;
+    tc+=r.capital; ti+=r.interes; tg+=r.gastos; tt+=r.total; tm+=r.ingresoManual; tce+=r.cobEst; tin+=r.ingreso; tn+=r.neto;
     const netoStyle = r.neto<0 ? 'color:var(--clay);' : 'color:var(--sage);';
     return '<tr>' +
       '<td>'+monthLabel(r.key)+'</td>' +
@@ -2250,16 +2693,18 @@ function renderMonthTab(){
       '<td class="mono">'+money(r.interes)+'</td>' +
       '<td class="mono">'+money(r.gastos)+'</td>' +
       '<td class="mono">'+money(r.total)+'</td>' +
-      '<td class="mono" style="cursor:pointer;text-decoration:underline dotted;" title="Clic para cargar el ingreso de este mes" onclick="openIncomeModal(\''+r.key+'\')">'+money(r.ingreso)+'</td>' +
+      '<td class="mono" style="cursor:pointer;text-decoration:underline dotted;" title="Clic para cargar otros ingresos de este mes" onclick="openIncomeModal(\''+r.key+'\')">'+money(r.ingresoManual)+'</td>' +
+      '<td class="mono">'+(cobConfig.link ? (r.cobEst>0 ? money(r.cobEst) : '—') : '<span style="color:var(--ink-400);">no se suma</span>')+'</td>' +
+      '<td class="mono" style="font-weight:600;">'+money(r.ingreso)+'</td>' +
       '<td class="mono" style="'+netoStyle+'font-weight:600;">'+money(r.neto)+'</td>' +
       '<td>'+Array.from(r.bancos).map(function(b){return escapeHtml(b);}).join(', ')+'</td>' +
     '</tr>';
   }).join('');
-  const netoTotalStyle = totalNeto<0 ? 'color:var(--clay);' : 'color:var(--sage);';
+  const netoTotalStyle = tn<0 ? 'color:var(--clay);' : 'color:var(--sage);';
   table.innerHTML =
-    '<tr><th>Mes</th><th class="mono">Capital</th><th class="mono">Interés</th><th class="mono">Gastos</th><th class="mono">Total a pagar</th><th class="mono">Ingreso</th><th class="mono">Neto</th><th>Bancos</th></tr>' +
+    '<tr><th>Mes</th><th class="mono">Capital</th><th class="mono">Interés</th><th class="mono">Gastos</th><th class="mono">Total a pagar</th><th class="mono">Otros ingresos</th><th class="mono">Cobranzas estimadas</th><th class="mono">Ingreso total</th><th class="mono">Neto</th><th>Bancos</th></tr>' +
     body +
-    '<tr class="total-row"><td>Total</td><td class="mono">'+money(totalCapital)+'</td><td class="mono">'+money(totalInteres)+'</td><td class="mono">'+money(totalGastos)+'</td><td class="mono">'+money(totalTotal)+'</td><td class="mono">'+money(totalIngreso)+'</td><td class="mono" style="'+netoTotalStyle+'">'+money(totalNeto)+'</td><td></td></tr>';
+    '<tr class="total-row"><td>Total</td><td class="mono">'+money(tc)+'</td><td class="mono">'+money(ti)+'</td><td class="mono">'+money(tg)+'</td><td class="mono">'+money(tt)+'</td><td class="mono">'+money(tm)+'</td><td class="mono">'+money(tce)+'</td><td class="mono">'+money(tin)+'</td><td class="mono" style="'+netoTotalStyle+'">'+money(tn)+'</td><td></td></tr>';
 }
 
 /* ---------- ingresos mensuales ---------- */
@@ -2307,6 +2752,21 @@ function renderStatsTab(){
     '<div class="stat"><div class="stat-label">Costo financiero relativo</div><div class="stat-value">'+costoFinancieroPct.toFixed(1)+'%</div><div class="stat-sub">Costo total sobre el monto original prestado</div></div>' +
     '<div class="stat"><div class="stat-label">Deuda pendiente total</div><div class="stat-value">'+money(g.saldoPendienteTotal)+'</div><div class="stat-sub">Capital que todavía falta pagar</div></div>' +
   '</div>';
+
+  // Ingresos vs pagos (cobranzas estimadas + otros ingresos)
+  const flujo = proyeccionFlujoCaja(6);
+  const f0 = flujo[0];
+  html += '<div class="stat-grid">' +
+    '<div class="stat"><div class="stat-label">Ingresos esperados del mes</div><div class="stat-value">'+money(f0.ingreso)+'</div><div class="stat-sub">Cobranzas estimadas '+money(f0.cobranzas)+' · otros '+money(f0.otros)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Pagos del mes</div><div class="stat-value">'+money(f0.obligaciones)+'</div><div class="stat-sub">Cuotas, cheques y otros pagos</div></div>' +
+    '<div class="stat"><div class="stat-label">Cobertura de pagos con ingresos</div><div class="stat-value">'+(f0.obligaciones>0 ? Math.round(f0.ingreso/f0.obligaciones*100)+' %' : '—')+'</div><div class="stat-sub">'+(f0.neto>=0?'Sobran ':'Faltan ')+money(Math.abs(f0.neto))+'</div></div>' +
+  '</div>';
+  html += '<div class="chart-card"><div class="chart-title">Ingresos y pagos por mes</div><div class="ledger" style="margin-top:8px;"><table class="ltable"><tr><th>Mes</th><th class="mono">Cobranzas estimadas</th><th class="mono">Otros ingresos</th><th class="mono">Ingreso total</th><th class="mono">Pagos del mes</th><th class="mono">Neto</th></tr>' +
+    flujo.map(function(p){
+      const col = p.neto<0 ? 'var(--clay)' : 'var(--sage)';
+      return '<tr><td>'+monthLabel(p.key)+'</td><td class="mono">'+money(p.cobranzas)+'</td><td class="mono">'+money(p.otros)+'</td><td class="mono">'+money(p.ingreso)+'</td><td class="mono">'+money(p.obligaciones)+'</td><td class="mono" style="color:'+col+';font-weight:600;">'+money(p.neto)+'</td></tr>';
+    }).join('') + '</table></div>' +
+    '<p class="modal-sub" style="margin-top:10px;margin-bottom:0;">Las cobranzas estimadas vienen de la sección Cobranzas'+(cobConfig.repHasta?' (reporte cargado hasta el '+formatDate(cobConfig.repHasta)+')':'')+'; los otros ingresos son los que cargás en Finanzas › Por mes.</p></div>';
 
   // Gráfico: saldo pendiente por banco
   const maxSaldo = Math.max.apply(null, banks.map(function(b){ return b.saldoPendiente; }).concat([1]));
@@ -2384,7 +2844,7 @@ function renderStatsTab(){
       '<div class="bar-value" style="color:'+color+';">'+money(p.neto)+'</div>' +
     '</div>';
   });
-  html += '<p class="modal-sub" style="margin-top:10px;margin-bottom:0;">Ingreso mensual cargado en "Por mes" menos préstamos, cheques y otros pagos pendientes de cada mes. Saldo acumulado al final del período: <strong style="color:var(--paper);">'+money(proyeccion.reduce(function(a,p){return a+p.neto;},0))+'</strong></p></div>';
+  html += '<p class="modal-sub" style="margin-top:10px;margin-bottom:0;">Ingresos del mes (cobranzas estimadas + otros ingresos de "Por mes") menos préstamos, cheques y otros pagos pendientes de cada mes. Saldo acumulado al final del período: <strong style="color:var(--paper);">'+money(proyeccion.reduce(function(a,p){return a+p.neto;},0))+'</strong></p></div>';
 
   wrap.innerHTML = html;
 }
@@ -2401,8 +2861,9 @@ function proyeccionFlujoCaja(mesesAdelante){
     const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
     const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     const totalObligaciones = map[key] || 0;
-    const ingreso = incomes[key] || 0;
-    result.push({ key: key, ingreso: ingreso, obligaciones: totalObligaciones, neto: ingreso - totalObligaciones });
+    const otros = incomes[key] || 0, cobs = cobLinkedIncome(key);
+    const ingreso = otros + cobs;
+    result.push({ key: key, otros: otros, cobranzas: cobs, ingreso: ingreso, obligaciones: totalObligaciones, neto: ingreso - totalObligaciones });
   }
   return result;
 }
@@ -2543,8 +3004,8 @@ function renderPagosTab(){
   const posiblesCheques = pagos.filter(function(p){ return p.tipo==='Otro' && /cheque/i.test(p.concepto||''); });
   const warningHtml = posiblesCheques.length>0
     ? '<div class="banner" style="background:var(--amber-dim);border-color:var(--amber);margin-bottom:14px;">' +
-        '<div class="banner-title" style="color:#e8bd82;">⚠ '+posiblesCheques.length+' pago(s) cargado(s) como "Otro pago" mencionan un cheque en el concepto — probablemente deberían ser "Cheque a proveedor" o "Cheque a empresa del grupo".</div>' +
-        '<button class="btn-ghost btn-small" style="border-color:var(--amber);color:#e8bd82;" onclick="reclasificarSospechosos()">Reclasificar todos como cheque a proveedor</button>' +
+        '<div class="banner-title" style="color:#8a5a00;">⚠ '+posiblesCheques.length+' pago(s) cargado(s) como "Otro pago" mencionan un cheque en el concepto — probablemente deberían ser "Cheque a proveedor" o "Cheque a empresa del grupo".</div>' +
+        '<button class="btn-ghost btn-small" style="border-color:var(--amber);color:#8a5a00;" onclick="reclasificarSospechosos()">Reclasificar todos como cheque a proveedor</button>' +
       '</div>'
     : '';
   const sorted = pagos.slice().sort(function(a,b){ return daysUntil(a.fecha)-daysUntil(b.fecha); });
@@ -2558,7 +3019,7 @@ function renderPagosTab(){
       else badge = '<span class="badge badge-ok">Al día</span>';
     }
     return '<div class="loan-card">' +
-      '<div><div class="lc-title">'+escapeHtml(p.entidad)+'</div><div class="lc-sub">'+escapeHtml(pagoTipoLabel(p.tipo))+(p.concepto?' · '+escapeHtml(p.concepto):'')+(sospechoso?' · <span style="color:#e8bd82;">¿es un cheque?</span>':'')+'</div></div>' +
+      '<div><div class="lc-title">'+escapeHtml(p.entidad)+'</div><div class="lc-sub">'+escapeHtml(pagoTipoLabel(p.tipo))+(p.concepto?' · '+escapeHtml(p.concepto):'')+(p.marca?' · Marca: '+escapeHtml(p.marca):'')+(sospechoso?' · <span style="color:#8a5a00;">¿es un cheque?</span>':'')+'</div></div>' +
       '<div><div class="lc-label">Monto</div><div class="lc-value">'+money(p.monto)+'</div></div>' +
       '<div><div class="lc-label">Fecha de pago</div><div class="lc-value">'+formatDate(p.fecha)+'</div></div>' +
       '<div><div style="margin-top:5px;">'+badge+'</div></div>' +
@@ -2635,6 +3096,7 @@ function openPagoModal(pago){
   document.getElementById('p-tipo').value = pago ? pago.tipo : 'Cheque';
   document.getElementById('p-entidad').value = pago ? pago.entidad : '';
   document.getElementById('p-concepto').value = pago ? pago.concepto : '';
+  document.getElementById('p-marca').value = pago ? (pago.marca||'') : '';
   document.getElementById('p-monto').value = pago ? pago.monto : '';
   document.getElementById('p-fecha').value = pago ? pago.fecha : '';
   document.getElementById('p-estado').value = pago ? pago.estado : 'Pendiente';
@@ -2663,6 +3125,7 @@ function savePago(e){
     tipo: document.getElementById('p-tipo').value,
     entidad: entidad,
     concepto: document.getElementById('p-concepto').value.trim(),
+    marca: document.getElementById('p-marca').value.trim(),
     monto: monto,
     fecha: fecha,
     estado: document.getElementById('p-estado').value
@@ -2728,7 +3191,8 @@ function renderAll(){
   renderStats();
   renderBanner();
   renderBackupReminder();
-  renderActivePanel();
+  refreshMarcasList();
+  if(currentSection==='home') renderHome(); else renderActivePanel();
 }
 
 /* ---------- modal: préstamo ---------- */
@@ -3666,6 +4130,1309 @@ function saveCuota(e){
   return false;
 }
 
+/* =====================================================================
+   NAVEGACIÓN POR ÁREAS (pantalla de inicio)
+   ===================================================================== */
+const SECTIONS = {
+  flujo:     {icon:'💵', title:'Flujo de caja', desc:'Lo que hay que pagar cada día: cuotas de préstamos, cheques y otros pagos.', tabs:['flujo','pagos','priority']},
+  finanzas:  {icon:'🏦', title:'Finanzas', desc:'Deuda general, cheques por marca y por empresa, en qué se gasta, préstamos y costo financiero.', tabs:['deudames','gastos','loans','bank','month','stats']},
+  cobranzas: {icon:'🧾', title:'Cobranzas', desc:'Seguimiento de lo que deben los clientes por vendedor y estimación de lo que se va a recaudar.', tabs:['cobranzas','cobest','cobsup']},
+  ventas:    {icon:'📈', title:'Ventas', desc:'Sección preparada para definir juntos qué querés ver.', tabs:['ventas'], soon:true},
+  resumen:   {icon:'📋', title:'Resumen del día', desc:'Lo más importante de hoy en una sola pantalla.', tabs:['resumen']}
+};
+let currentSection = 'home';
+const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function setHeader(eyebrow, title, sub){
+  document.getElementById('hdr-eyebrow').textContent = eyebrow;
+  document.getElementById('hdr-title').textContent = title;
+  document.getElementById('hdr-sub').textContent = sub;
+}
+function openSection(sec){
+  const S = SECTIONS[sec];
+  if(!S){ goHome(); return; }
+  currentSection = sec;
+  document.getElementById('home-screen').style.display = 'none';
+  document.getElementById('section-wrap').style.display = 'block';
+  document.body.classList.add('in-section');
+  document.getElementById('global-tools').classList.add('collapsed');
+  setHeader(COMPANY_NAME, S.title, S.desc);
+  document.querySelectorAll('.tab-btn').forEach(function(b){
+    b.style.display = S.tabs.indexOf(b.dataset.tab)!==-1 ? '' : 'none';
+  });
+  document.getElementById('tabs-bar').style.display = S.tabs.length>1 ? 'flex' : 'none';
+  document.getElementById('stats').style.display = sec==='finanzas' ? '' : 'none';
+  document.getElementById('banner-container').style.display = (sec==='finanzas' || sec==='flujo') ? '' : 'none';
+  switchTab(S.tabs[0]);
+  renderStats();
+  renderBanner();
+  try{ history.replaceState(null, '', '#'+sec); }catch(e){}
+  window.scrollTo(0,0);
+}
+function goHome(){
+  currentSection = 'home';
+  document.getElementById('home-screen').style.display = 'block';
+  document.getElementById('section-wrap').style.display = 'none';
+  document.body.classList.remove('in-section');
+  document.getElementById('global-tools').classList.remove('collapsed');
+  setHeader(COMPANY_NAME, 'Panel de control', 'Elegí el área en la que querés trabajar.');
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  renderHome();
+  window.scrollTo(0,0);
+}
+function toggleTools(){
+  document.getElementById('global-tools').classList.toggle('collapsed');
+}
+function renderHome(){
+  const today = todayISOStr();
+  const obl = allObligaciones();
+  const hoy = obl.filter(function(it){ return it.fechaEfectiva===today; }).reduce(function(a,it){ return a+it.monto; },0);
+  const atrasados = obl.filter(function(it){ return (it.fuente==='Cheque' || it.fuente==='ChequeGrupo') && it.fechaEfectiva<today; });
+  const gs = globalStats();
+  const cs = cobStats();
+  const metrics = {
+    flujo:     {txt:'Hoy a pagar: '+money(hoy)+(atrasados.length?' · '+atrasados.length+' cheque(s) atrasado(s)':''), alert: atrasados.length>0},
+    finanzas:  {txt:'Saldo de préstamos: '+money(gs.saldoPendienteTotal)+(gs.vencidas?' · '+gs.vencidas+' cuota(s) vencida(s)':''), alert: gs.vencidas>0},
+    cobranzas: {txt: cobranzas.length ? 'Vencido: '+money(cs.vencido)+' · Pendiente: '+money(cs.pendiente) : 'Todavía sin cobranzas cargadas', alert: cs.vencido>0},
+    ventas:    {txt:'Próximamente'},
+    resumen:   {txt:'Pagos, cheques y cobranzas de hoy'}
+  };
+  document.getElementById('home-grid').innerHTML = Object.keys(SECTIONS).map(function(k){
+    const S = SECTIONS[k], m = metrics[k];
+    return '<button type="button" class="home-card'+(S.soon?' soon':'')+'" onclick="openSection(\''+k+'\')">' +
+      '<div class="hc-icon">'+S.icon+'</div>' +
+      '<div class="hc-title">'+escapeHtml(S.title)+'</div>' +
+      '<div class="hc-desc">'+escapeHtml(S.desc)+'</div>' +
+      '<div class="hc-metric'+(m.alert?' alert':'')+'">'+escapeHtml(m.txt)+'</div>' +
+    '</button>';
+  }).join('');
+}
+function refreshMarcasList(){
+  const dl = document.getElementById('marcas-list');
+  if(dl){
+    const set = {};
+    pagos.forEach(function(p){ if(p.marca) set[p.marca]=1; });
+    dl.innerHTML = Object.keys(set).sort().map(function(m){ return '<option value="'+escapeHtml(m)+'"></option>'; }).join('');
+  }
+  const dv = document.getElementById('vendedores-list');
+  if(dv){
+    const set2 = {};
+    cobranzas.forEach(function(c){ if(c.vendedor) set2[c.vendedor]=1; });
+    dv.innerHTML = Object.keys(set2).sort().map(function(m){ return '<option value="'+escapeHtml(m)+'"></option>'; }).join('');
+  }
+}
+
+/* =====================================================================
+   FINANZAS · DEUDA TOTAL DEL MES (por tipo, por marca y por empresa)
+   ===================================================================== */
+let dmY = new Date().getFullYear();
+let dmM = new Date().getMonth();
+let dmSel = {marca:'', empresa:''};
+let dmNames = {marca:[], empresa:[]};
+function changeDmMonth(n){
+  dmM += n;
+  if(dmM<0){ dmM=11; dmY--; }
+  if(dmM>11){ dmM=0; dmY++; }
+  dmSel = {marca:'', empresa:''};
+  renderDeudaMesTab();
+}
+function goToThisMonthDm(){
+  const d = new Date(); dmY = d.getFullYear(); dmM = d.getMonth(); dmSel = {marca:'', empresa:''};
+  renderDeudaMesTab();
+}
+function dmItems(y, m){
+  const ym = y+'-'+String(m+1).padStart(2,'0');
+  const out = [];
+  loans.forEach(function(l){
+    l.cuotas.forEach(function(c){
+      const eff = nextBusinessDay(c.fecha);
+      if(eff.slice(0,7)!==ym) return;
+      out.push({tipo:'Prestamo', entidad:l.banco, detalle:(l.numeroOperacion||'s/n')+' · Cuota N°'+c.numero,
+        monto:c.capital+c.interes+(c.gastos||0), pagado:c.estado!=='Pendiente', marca:'', eff:eff, loanId:l.id, cuotaId:c.id});
+    });
+  });
+  pagos.forEach(function(p){
+    const eff = nextBusinessDay(p.fecha);
+    if(eff.slice(0,7)!==ym) return;
+    out.push({tipo:p.tipo, entidad:p.entidad, detalle:p.concepto||'—', monto:p.monto, pagado:p.estado!=='Pendiente',
+      marca:p.marca||(p.tipo==='Cheque'?(p.entidad||'').trim():''), eff:eff, pagoId:p.id});
+  });
+  return out;
+}
+function dmAgg(items){
+  let total=0, pagado=0;
+  items.forEach(function(it){ total+=it.monto; if(it.pagado) pagado+=it.monto; });
+  return {n:items.length, total:total, pagado:pagado, pendiente:total-pagado};
+}
+function setDmSel(kind, name){
+  dmSel[kind] = name || '';
+  renderDeudaMesTab();
+}
+function setDmSelIdx(kind, i){
+  const name = dmNames[kind][i];
+  dmSel[kind] = (dmSel[kind]===name) ? '' : name;
+  renderDeudaMesTab();
+}
+/* Tabla agrupada (por marca o por empresa) + selector + detalle de cheques del grupo elegido */
+function dmGroupBlock(kind, items, cfg){
+  const today = todayISOStr();
+  const subset = items.filter(function(it){ return it.tipo===cfg.tipo; });
+  const by = {};
+  subset.forEach(function(it){
+    const k = cfg.keyOf(it) || cfg.sin;
+    (by[k] = by[k] || []).push(it);
+  });
+  dmNames[kind] = Object.keys(by).sort(function(a,b){
+    if(a===cfg.sin) return 1; if(b===cfg.sin) return -1;
+    return dmAgg(by[b]).total - dmAgg(by[a]).total;
+  });
+  if(dmSel[kind] && !by[dmSel[kind]]) dmSel[kind] = '';
+  const tot = dmAgg(subset);
+  const tbl = document.getElementById(cfg.tableId);
+  if(subset.length===0){
+    tbl.innerHTML = '<tr><td class="empty" style="border:none;">'+cfg.emptyMsg+'</td></tr>';
+  }else{
+    tbl.innerHTML = '<tr><th>'+cfg.groupLabel+'</th><th class="mono">Cheques</th><th class="mono">Total</th><th class="mono">Ya pagado</th><th class="mono">Pendiente</th><th class="mono">% del total</th></tr>' +
+      dmNames[kind].map(function(name,i){
+        const a = dmAgg(by[name]);
+        return '<tr class="row-click'+(dmSel[kind]===name?' row-sel':'')+'" onclick="setDmSelIdx(\''+kind+'\','+i+')">' +
+          '<td>'+escapeHtml(name)+(name===cfg.sin && cfg.sinHint ? ' <span class="pill">'+cfg.sinHint+'</span>' : '')+'</td><td class="mono">'+a.n+'</td><td class="mono">'+money(a.total)+'</td><td class="mono">'+money(a.pagado)+'</td><td class="mono">'+money(a.pendiente)+'</td><td class="mono">'+(tot.total>0?(a.total/tot.total*100).toFixed(1)+' %':'—')+'</td></tr>';
+      }).join('') +
+      '<tr class="total-row"><td>'+cfg.totalLabel+'</td><td class="mono">'+tot.n+'</td><td class="mono">'+money(tot.total)+'</td><td class="mono">'+money(tot.pagado)+'</td><td class="mono">'+money(tot.pendiente)+'</td><td class="mono">100 %</td></tr>';
+  }
+  const sel = document.getElementById(cfg.selId);
+  sel.innerHTML = '<option value="">'+cfg.allLabel+'</option>' + dmNames[kind].map(function(n){
+    return '<option value="'+escapeHtml(n)+'"'+(n===dmSel[kind]?' selected':'')+'>'+escapeHtml(n)+'</option>';
+  }).join('');
+  sel.value = dmSel[kind];
+
+  const list = (dmSel[kind] ? (by[dmSel[kind]]||[]) : subset).slice().sort(function(a,b){ return a.eff.localeCompare(b.eff) || b.monto-a.monto; });
+  const td = document.getElementById(cfg.detId);
+  if(list.length===0){
+    td.innerHTML = '<tr><td class="empty" style="border:none;">No hay cheques para mostrar.</td></tr>';
+  }else{
+    let sum = 0;
+    td.innerHTML = '<tr><th class="mono">Fecha de pago</th><th>'+cfg.entityLabel+'</th>'+(cfg.showMarca?'<th>Marca</th>':'')+'<th>Detalle</th><th>Estado</th><th class="mono">Monto</th><th style="text-align:right;">Acciones</th></tr>' +
+      list.map(function(it){
+        sum += it.monto;
+        let badge = '<span class="pill">Pagado</span>';
+        if(!it.pagado) badge = it.eff<today ? '<span class="badge badge-late">Vencido</span>' : (it.eff===today ? '<span class="badge badge-warn">Hoy</span>' : '<span class="badge badge-ok">Pendiente</span>');
+        return '<tr><td class="mono">'+formatDate(it.eff)+'</td><td>'+escapeHtml(it.entidad)+'</td>'+(cfg.showMarca?'<td>'+escapeHtml(it.marca||'—')+'</td>':'')+'<td>'+escapeHtml(it.detalle)+'</td><td>'+badge+'</td><td class="mono">'+money(it.monto)+'</td>' +
+          '<td style="text-align:right;">' +
+            (!it.pagado ? '<button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\'\',\'\',\''+it.pagoId+'\')">✓</button> ' : '') +
+            '<button class="icon-btn" title="Editar" onclick="editPago(\''+it.pagoId+'\')">✎</button>' +
+          '</td></tr>';
+      }).join('') +
+      '<tr class="total-row"><td colspan="'+(cfg.showMarca?5:4)+'">Total'+(dmSel[kind]?' — '+escapeHtml(dmSel[kind]):'')+'</td><td class="mono">'+money(sum)+'</td><td></td></tr>';
+  }
+}
+function renderDeudaMesTab(){
+  document.getElementById('dm-month-label').textContent = MESES_ES[dmM]+' '+dmY;
+  const items = dmItems(dmY, dmM);
+  const all = dmAgg(items);
+  const groups = [
+    {k:'Prestamo', label:'Cuotas de préstamos'},
+    {k:'Cheque', label:'Cheques a proveedores'},
+    {k:'ChequeGrupo', label:'Cheques a empresas del grupo'},
+    {k:'Otro', label:'Otros pagos'}
+  ];
+  const ag = {};
+  groups.forEach(function(g){ ag[g.k] = dmAgg(items.filter(function(it){ return it.tipo===g.k; })); });
+
+  document.getElementById('dm-summary').innerHTML =
+    '<div class="stat"><div class="stat-label">Deuda total del mes</div><div class="stat-value">'+money(all.total)+'</div><div class="stat-sub">'+all.n+' obligación(es)</div></div>' +
+    '<div class="stat'+(all.pendiente>0?' alert':'')+'"><div class="stat-label">Pendiente de pago</div><div class="stat-value">'+money(all.pendiente)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Ya pagado</div><div class="stat-value">'+money(all.pagado)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Cheques a proveedores</div><div class="stat-value">'+money(ag.Cheque.total)+'</div><div class="stat-sub">'+ag.Cheque.n+' cheque(s)</div></div>' +
+    '<div class="stat"><div class="stat-label">Cheques a empresas del grupo</div><div class="stat-value">'+money(ag.ChequeGrupo.total)+'</div><div class="stat-sub">'+ag.ChequeGrupo.n+' cheque(s)</div></div>';
+
+  const pct = function(v){ return all.total>0 ? (v/all.total*100).toFixed(1)+' %' : '—'; };
+  document.getElementById('dm-tipos').innerHTML =
+    '<tr><th>Tipo</th><th class="mono">Cantidad</th><th class="mono">Total del mes</th><th class="mono">Ya pagado</th><th class="mono">Pendiente</th><th class="mono">% del total</th></tr>' +
+    groups.map(function(g){
+      const a = ag[g.k];
+      return '<tr><td>'+g.label+'</td><td class="mono">'+a.n+'</td><td class="mono">'+money(a.total)+'</td><td class="mono">'+money(a.pagado)+'</td><td class="mono">'+money(a.pendiente)+'</td><td class="mono">'+pct(a.total)+'</td></tr>';
+    }).join('') +
+    '<tr class="total-row"><td>Total</td><td class="mono">'+all.n+'</td><td class="mono">'+money(all.total)+'</td><td class="mono">'+money(all.pagado)+'</td><td class="mono">'+money(all.pendiente)+'</td><td class="mono">100 %</td></tr>';
+
+  dmGroupBlock('marca', items, {tipo:'Cheque', keyOf:function(it){ return it.marca; }, sin:'Sin marca', sinHint:'falta la marca',
+    tableId:'dm-marcas', selId:'dm-marca-select', detId:'dm-detalle', groupLabel:'Marca', entityLabel:'Proveedor', showMarca:true,
+    allLabel:'Todas las marcas', totalLabel:'Total cheques a proveedores', emptyMsg:'No hay cheques a proveedores en este mes.'});
+  dmGroupBlock('empresa', items, {tipo:'ChequeGrupo', keyOf:function(it){ return (it.entidad||'').trim(); }, sin:'Sin empresa', sinHint:'',
+    tableId:'dm-empresas', selId:'dm-empresa-select', detId:'dm-detalle-emp', groupLabel:'Empresa', entityLabel:'Empresa', showMarca:false,
+    allLabel:'Todas las empresas', totalLabel:'Total cheques a empresas del grupo', emptyMsg:'No hay cheques a empresas del grupo en este mes.'});
+}
+
+/* =====================================================================
+   FINANZAS · EN QUÉ SE GASTA (análisis por tipo, marca, proveedor, empresa)
+   ===================================================================== */
+let gsPeriodo = 'mes';
+function setGsPeriodo(v){ gsPeriodo = v; renderGastosTab(); }
+function isoFromDate(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function monthStartISO(y,m){ return isoFromDate(new Date(y,m,1)); }
+function monthEndISO(y,m){ return isoFromDate(new Date(y,m+1,0)); }
+function gsRange(p){
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth();
+  if(p==='mes') return {from:monthStartISO(y,m), to:monthEndISO(y,m)};
+  if(p==='mes-1') return {from:monthStartISO(y,m-1), to:monthEndISO(y,m-1)};
+  if(p==='3m') return {from:monthStartISO(y,m-2), to:monthEndISO(y,m)};
+  if(p==='6m') return {from:monthStartISO(y,m-5), to:monthEndISO(y,m)};
+  if(p==='anio') return {from:y+'-01-01', to:y+'-12-31'};
+  return {from:'0000-01-01', to:'9999-12-31'};
+}
+function gsItems(from, to){
+  const out = [];
+  loans.forEach(function(l){
+    l.cuotas.forEach(function(c){
+      const eff = nextBusinessDay(c.fecha);
+      if(eff<from || eff>to) return;
+      out.push({tipo:'Prestamo', entidad:l.banco, marca:'', eff:eff, capital:c.capital, interes:c.interes, gastos:(c.gastos||0), monto:c.capital+c.interes+(c.gastos||0)});
+    });
+  });
+  pagos.forEach(function(p){
+    const eff = nextBusinessDay(p.fecha);
+    if(eff<from || eff>to) return;
+    out.push({tipo:p.tipo, entidad:(p.entidad||'').trim(), marca:p.marca||(p.tipo==='Cheque'?(p.entidad||'').trim():''), eff:eff, monto:p.monto});
+  });
+  return out;
+}
+function gsGroup(items, keyFn){
+  const m = {};
+  items.forEach(function(it){ const k = keyFn(it) || 'Sin especificar'; m[k] = (m[k]||0) + it.monto; });
+  return Object.keys(m).map(function(k){ return {name:k, value:m[k]}; }).sort(function(a,b){ return b.value-a.value; });
+}
+function gsBars(rows, total, emptyMsg, maxRows){
+  if(rows.length===0) return '<div class="empty" style="padding:20px 0;">'+emptyMsg+'</div>';
+  const max = rows[0].value || 1;
+  let html = rows.slice(0,maxRows).map(function(r){
+    const w = Math.max(2, Math.round(r.value/max*100));
+    return '<div class="bar-row" style="grid-template-columns:170px 1fr 210px;">' +
+      '<div class="bank-name" title="'+escapeHtml(r.name)+'">'+escapeHtml(r.name)+'</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%;"></div></div>' +
+      '<div class="bar-value">'+money(r.value)+' <span style="color:var(--ink-400);">'+(total>0?(r.value/total*100).toFixed(1)+'%':'')+'</span></div></div>';
+  }).join('');
+  if(rows.length>maxRows){
+    const resto = rows.slice(maxRows).reduce(function(a,r){ return a+r.value; },0);
+    html += '<p class="modal-sub" style="margin:6px 0 0;">… y '+(rows.length-maxRows)+' más por '+money(resto)+'.</p>';
+  }
+  return html;
+}
+function renderGastosTab(){
+  document.getElementById('gs-periodo').value = gsPeriodo;
+  const r = gsRange(gsPeriodo);
+  const items = gsItems(r.from, r.to);
+  const sum = function(a){ return a.reduce(function(s,it){ return s+it.monto; },0); };
+  const por = function(t){ return items.filter(function(it){ return it.tipo===t; }); };
+  const total = sum(items);
+  const prest = por('Prestamo'), chP = por('Cheque'), chG = por('ChequeGrupo'), otros = por('Otro');
+  const interes = prest.reduce(function(s,it){ return s+it.interes; },0);
+  const gastosB = prest.reduce(function(s,it){ return s+it.gastos; },0);
+  const marcas = gsGroup(chP, function(it){ return it.marca || 'Sin marca'; });
+  const topMarca = marcas.filter(function(m){ return m.name!=='Sin marca'; })[0];
+
+  document.getElementById('gs-summary').innerHTML =
+    '<div class="stat"><div class="stat-label">Total del período</div><div class="stat-value">'+money(total)+'</div><div class="stat-sub">'+items.length+' obligación(es)</div></div>' +
+    '<div class="stat"><div class="stat-label">Costo financiero</div><div class="stat-value">'+money(interes+gastosB)+'</div><div class="stat-sub">Interés '+money(interes)+' + gastos '+money(gastosB)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Cheques a proveedores</div><div class="stat-value">'+money(sum(chP))+'</div><div class="stat-sub">'+(total>0?(sum(chP)/total*100).toFixed(1):'0')+' % del total</div></div>' +
+    '<div class="stat"><div class="stat-label">Marca que más pesa</div><div class="stat-value" style="font-size:18px;">'+escapeHtml(topMarca?topMarca.name:'—')+'</div><div class="stat-sub">'+(topMarca?money(topMarca.value):'Sin marcas cargadas')+'</div></div>';
+
+  const cats = [
+    {name:'Cuotas de préstamos', value:sum(prest)},
+    {name:'Cheques a proveedores', value:sum(chP)},
+    {name:'Cheques a empresas del grupo', value:sum(chG)},
+    {name:'Otros pagos', value:sum(otros)}
+  ].filter(function(c){ return c.value>0; }).sort(function(a,b){ return b.value-a.value; });
+  document.getElementById('gs-cats').innerHTML = gsBars(cats, total, 'No hay obligaciones en este período.', 10);
+  document.getElementById('gs-marcas').innerHTML = gsBars(marcas, sum(chP), 'No hay cheques a proveedores en este período.', 12);
+  document.getElementById('gs-prov').innerHTML = gsBars(gsGroup(chP, function(it){ return it.entidad; }), sum(chP), 'No hay cheques a proveedores en este período.', 10);
+  document.getElementById('gs-grupo').innerHTML = gsBars(gsGroup(chG, function(it){ return it.entidad; }), sum(chG), 'No hay cheques a empresas del grupo en este período.', 10);
+  document.getElementById('gs-otros').innerHTML = gsBars(gsGroup(otros, function(it){ return it.entidad; }), sum(otros), 'No hay otros pagos en este período.', 10);
+
+  // evolución últimos 6 meses (apilado por tipo)
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth();
+  const meses = [];
+  for(let i=5;i>=0;i--){
+    const dt = new Date(y, m-i, 1);
+    const ym = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    const its = gsItems(monthStartISO(dt.getFullYear(),dt.getMonth()), monthEndISO(dt.getFullYear(),dt.getMonth()));
+    const s = function(t){ return its.filter(function(it){ return it.tipo===t; }).reduce(function(a,it){ return a+it.monto; },0); };
+    meses.push({label:MESES_ES[dt.getMonth()].slice(0,3)+' '+String(dt.getFullYear()).slice(2), p:s('Prestamo'), c:s('Cheque'), g:s('ChequeGrupo'), o:s('Otro')});
+  }
+  const maxM = Math.max.apply(null, meses.map(function(x){ return x.p+x.c+x.g+x.o; }).concat([1]));
+  let hm = '<div class="legend"><span><i style="background:var(--brass);"></i>Préstamos</span><span><i style="background:var(--clay);"></i>Cheques proveedores</span><span><i style="background:var(--amber);"></i>Cheques grupo</span><span><i style="background:var(--sage);"></i>Otros</span></div>';
+  meses.forEach(function(x){
+    const t = x.p+x.c+x.g+x.o;
+    const w = function(v){ return (v/maxM*100)+'%'; };
+    hm += '<div class="stacked-row"><div>'+x.label+'</div><div class="stacked-track">' +
+      '<div style="width:'+w(x.p)+';background:var(--brass);height:100%;"></div><div style="width:'+w(x.c)+';background:var(--clay);height:100%;"></div>' +
+      '<div style="width:'+w(x.g)+';background:var(--amber);height:100%;"></div><div style="width:'+w(x.o)+';background:var(--sage);height:100%;"></div></div>' +
+      '<div class="bar-value mono">'+money(t)+'</div></div>';
+  });
+  document.getElementById('gs-meses').innerHTML = hm;
+}
+
+/* =====================================================================
+   COBRANZAS (por vendedor)
+   ===================================================================== */
+let cobFilter = {v:'', e:'pend', q:'', s:''};
+function normKey(s){ return normalizeHeader(s).replace(/\s+/g,' '); }
+function cobSaldo(c){ return Math.max(0, (c.monto||0) - (c.cobrado||0)); }
+function addCobro(c, monto){
+  if(!monto || monto<=0) return;
+  c.cobros = c.cobros || [];
+  c.cobros.push({f:todayISOStr(), m:Math.round(monto)});
+}
+function cobCobradoEnMes(c, ym){
+  return (c.cobros||[]).reduce(function(a,x){ return a + ((x.f||'').slice(0,7)===ym ? x.m : 0); }, 0);
+}
+let cobParams = {atrasado:50, plazo:90};
+function loadCobParams(){
+  try{
+    const r = localStorage.getItem(COBPARAMS_KEY);
+    if(r){ const o = JSON.parse(r); if(typeof o.atrasado==='number') cobParams.atrasado=o.atrasado; if(typeof o.plazo==='number') cobParams.plazo=o.plazo; }
+  }catch(e){}
+}
+function saveCobParams(){
+  function clamp(id, def){ const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? def : Math.max(0, Math.min(100, v)); }
+  cobParams.atrasado = clamp('cob-pct-atrasado', 50);
+  cobParams.plazo = clamp('cob-pct-plazo', 90);
+  try{ localStorage.setItem(COBPARAMS_KEY, JSON.stringify(cobParams)); }catch(e){}
+  renderAll();
+}
+/* Estimación para un mes (YYYY-MM): lo atrasado solo cuenta en el mes en curso */
+function cobEstimate(ym, vendedor, sup){
+  const today = todayISOStr(), curYm = today.slice(0,7);
+  if(ym<curYm) return null;
+  let atrasado=0, plazo=0, cobrado=0;
+  cobranzas.forEach(function(c){
+    if(vendedor!==undefined && (c.vendedor||'Sin vendedor')!==vendedor) return;
+    if(sup && cobSupOf(c)!==sup) return;
+    if(ym===curYm) cobrado += cobCobradoEnMes(c, ym);
+    const s = cobSaldo(c);
+    if(s<=0) return;
+    if(c.vencimiento<today){ if(ym===curYm) atrasado += s; }
+    else if(c.vencimiento.slice(0,7)===ym) plazo += s;
+  });
+  const estimado = atrasado*cobParams.atrasado/100 + plazo*cobParams.plazo/100;
+  return {atrasado:atrasado, plazo:plazo, cobrado:cobrado, estimado:estimado, total:cobrado+estimado};
+}
+function usarEstimadoComoIngreso(key){
+  const e = cobEstimate(key);
+  if(!e) return;
+  incomes[key] = Math.round(e.total);
+  persistIncomes();
+  renderAll();
+}
+function renderCobEstimacion(){
+  fillSupFilters();
+  document.getElementById('cobest-hasta').value = cobConfig.repHasta || '';
+  document.getElementById('cobest-hasta-info').textContent = cobConfig.repHasta ? 'Las facturas que vencen después del '+formatDate(cobConfig.repHasta)+' todavía no están en el sistema, así que el estimado del mes es parcial hasta que cargues el reporte siguiente. Este ingreso ya está vinculado a Finanzas › Por mes.' : 'Indicá hasta qué fecha de vencimiento llega el reporte que cargaste. Este ingreso ya está vinculado a Finanzas › Por mes.';
+  document.getElementById('cob-pct-atrasado').value = cobParams.atrasado;
+  document.getElementById('cob-pct-plazo').value = cobParams.plazo;
+  const today = todayISOStr(), curYm = today.slice(0,7);
+  const nd = new Date(); const nextYm = isoFromDate(new Date(nd.getFullYear(), nd.getMonth()+1, 1)).slice(0,7);
+  const e = cobEstimate(curYm, undefined, cobFilter.s), en = cobEstimate(nextYm, undefined, cobFilter.s);
+  document.getElementById('cob-est-summary').innerHTML =
+    '<div class="stat"><div class="stat-label">Ya cobrado este mes</div><div class="stat-value">'+money(e.cobrado)+'</div><div class="stat-sub">Según los cobros registrados</div></div>' +
+    '<div class="stat"><div class="stat-label">Estimado a cobrar en lo que resta del mes</div><div class="stat-value">'+money(e.estimado)+'</div><div class="stat-sub">Atrasado '+money(e.atrasado)+' · vence en el mes '+money(e.plazo)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Ingreso total esperado del mes</div><div class="stat-value">'+money(e.total)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Estimado del mes siguiente</div><div class="stat-value">'+money(en.estimado)+'</div><div class="stat-sub">Sobre lo que vence en ese mes</div></div>';
+
+  const vend = {};
+  cobList().forEach(function(c){ vend[c.vendedor||'Sin vendedor'] = 1; });
+  const names = Object.keys(vend).sort();
+  const tv = document.getElementById('cob-est-vendedores');
+  if(names.length===0){
+    tv.innerHTML = '<tr><td class="empty" style="border:none;">Cuando cargues cobranzas vas a ver acá la estimación por vendedor.</td></tr>';
+  }else{
+    const rows = names.map(function(n){ return {n:n, e:cobEstimate(curYm, n, cobFilter.s)}; }).sort(function(a,b){ return b.e.total-a.e.total; });
+    const T = {atr:0, pl:0, est:0, cob:0, tot:0};
+    tv.innerHTML = '<tr><th>Vendedor (mes en curso)</th><th class="mono">Atrasado</th><th class="mono">Vence en el mes</th><th class="mono">Estimado a cobrar</th><th class="mono">Ya cobrado</th><th class="mono">Total esperado</th><th class="mono">Cumplimiento</th></tr>' +
+      rows.map(function(r){
+        const x = r.e; T.atr+=x.atrasado; T.pl+=x.plazo; T.est+=x.estimado; T.cob+=x.cobrado; T.tot+=x.total;
+        const base = x.cobrado + x.atrasado + x.plazo;
+        return '<tr><td>'+escapeHtml(r.n)+'</td><td class="mono">'+money(x.atrasado)+'</td><td class="mono">'+money(x.plazo)+'</td><td class="mono">'+money(x.estimado)+'</td><td class="mono">'+money(x.cobrado)+'</td><td class="mono">'+money(x.total)+'</td><td class="mono">'+(base>0?(x.cobrado/base*100).toFixed(0)+' %':'—')+'</td></tr>';
+      }).join('') +
+      '<tr class="total-row"><td>Total</td><td class="mono">'+money(T.atr)+'</td><td class="mono">'+money(T.pl)+'</td><td class="mono">'+money(T.est)+'</td><td class="mono">'+money(T.cob)+'</td><td class="mono">'+money(T.tot)+'</td><td class="mono">'+((T.cob+T.atr+T.pl)>0?(T.cob/(T.cob+T.atr+T.pl)*100).toFixed(0)+' %':'—')+'</td></tr>';
+  }
+  // estimación semanal: ventanas de 7 días desde hoy
+  const ts = document.getElementById('cob-est-semanas');
+  let atr = 0;
+  cobList().forEach(function(c){ const s = cobSaldo(c); if(s>0 && c.vencimiento<today) atr += s; });
+  let acum = atr*cobParams.atrasado/100;
+  let html = '<tr><th>Período</th><th class="mono">Saldo que vence</th><th class="mono">Estimado a cobrar</th><th class="mono">Acumulado</th></tr>' +
+    '<tr><td>Atrasado (vencido hasta ayer)</td><td class="mono">'+money(atr)+'</td><td class="mono">'+money(atr*cobParams.atrasado/100)+'</td><td class="mono">'+money(acum)+'</td></tr>';
+  for(let i=0;i<5;i++){
+    const from = addDaysISO(today, i*7), to = addDaysISO(today, i*7+6);
+    let v = 0;
+    cobList().forEach(function(c){ const s = cobSaldo(c); if(s>0 && c.vencimiento>=from && c.vencimiento<=to) v += s; });
+    const est = v*cobParams.plazo/100; acum += est;
+    html += '<tr><td>'+formatDate(from)+' al '+formatDate(to)+'</td><td class="mono">'+money(v)+'</td><td class="mono">'+money(est)+'</td><td class="mono">'+money(acum)+'</td></tr>';
+  }
+  ts.innerHTML = html;
+}
+function cobStats(sup){
+  let pendiente=0, vencido=0, porVencer=0, docs=0;
+  cobranzas.forEach(function(c){
+    if(sup && cobSupOf(c)!==sup) return;
+    const s = cobSaldo(c);
+    if(s<=0) return;
+    pendiente += s; docs++;
+    const d = daysUntil(c.vencimiento);
+    if(d<0) vencido += s; else if(d<=7) porVencer += s;
+  });
+  return {pendiente:pendiente, vencido:vencido, porVencer:porVencer, docs:docs};
+}
+function setCobFilter(which, val){
+  cobFilter[which] = val;
+  renderCobranzasTab();
+}
+function setCobVendedorIdx(i){
+  const name = cobVendedorNames[i];
+  cobFilter.v = (cobFilter.v===name) ? '' : name;
+  document.getElementById('cob-filter-vendedor').value = cobFilter.v;
+  renderCobranzasTab();
+}
+let cobVendedorNames = [];
+function renderCobranzasTab(){
+  fillSupFilters();
+  const cs = cobStats(cobFilter.s);
+  document.getElementById('cob-summary').innerHTML =
+    '<div class="stat"><div class="stat-label">Total pendiente de cobro</div><div class="stat-value">'+money(cs.pendiente)+'</div><div class="stat-sub">'+cs.docs+' documento(s)</div></div>' +
+    '<div class="stat'+(cs.vencido>0?' alert':'')+'"><div class="stat-label">Vencido</div><div class="stat-value">'+money(cs.vencido)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Vence en los próximos 7 días</div><div class="stat-value">'+money(cs.porVencer)+'</div></div>';
+
+  const byV = {};
+  cobList().forEach(function(c){
+    const v = c.vendedor || 'Sin vendedor';
+    const o = byV[v] = byV[v] || {docs:0, pendiente:0, vencido:0, cobradoMes:0};
+    o.cobradoMes += cobCobradoEnMes(c, todayISOStr().slice(0,7));
+    const s = cobSaldo(c);
+    if(s<=0) return;
+    o.docs++; o.pendiente += s;
+    if(daysUntil(c.vencimiento)<0) o.vencido += s;
+  });
+  cobVendedorNames = Object.keys(byV).sort(function(a,b){ return byV[b].vencido-byV[a].vencido || byV[b].pendiente-byV[a].pendiente; });
+  const tv = document.getElementById('cob-vendedores');
+  if(cobVendedorNames.length===0){
+    tv.innerHTML = '<tr><td class="empty" style="border:none;"><b>Todavía no cargaste cobranzas</b>Usá "+ Nueva cobranza" o "Importar desde Excel" para empezar.</td></tr>';
+  }else{
+    let tp=0, tvv=0, td2=0, tcm=0;
+    tv.innerHTML = '<tr><th>Vendedor</th><th>Supervisor</th><th class="mono">Documentos</th><th class="mono">Pendiente</th><th class="mono">Vencido</th><th class="mono">% vencido</th><th class="mono">Cobrado este mes</th></tr>' +
+      cobVendedorNames.map(function(n,i){
+        const o = byV[n]; tp+=o.pendiente; tvv+=o.vencido; td2+=o.docs; tcm+=o.cobradoMes;
+        return '<tr class="row-click'+(cobFilter.v===n?' row-sel':'')+'" onclick="setCobVendedorIdx('+i+')"><td>'+escapeHtml(n)+'</td><td>'+escapeHtml(cobSupOfName(n))+'</td><td class="mono">'+o.docs+'</td><td class="mono">'+money(o.pendiente)+'</td><td class="mono" style="'+(o.vencido>0?'color:#c1432a;':'')+'">'+money(o.vencido)+'</td><td class="mono">'+(o.pendiente>0?(o.vencido/o.pendiente*100).toFixed(0)+' %':'—')+'</td><td class="mono">'+money(o.cobradoMes)+'</td></tr>';
+      }).join('') +
+      '<tr class="total-row"><td>Total</td><td></td><td class="mono">'+td2+'</td><td class="mono">'+money(tp)+'</td><td class="mono">'+money(tvv)+'</td><td class="mono">'+(tp>0?(tvv/tp*100).toFixed(0)+' %':'—')+'</td><td class="mono">'+money(tcm)+'</td></tr>';
+  }
+  const selV = document.getElementById('cob-filter-vendedor');
+  selV.innerHTML = '<option value="">Todos los vendedores</option>' + cobVendedorNames.map(function(n){
+    return '<option value="'+escapeHtml(n)+'"'+(n===cobFilter.v?' selected':'')+'>'+escapeHtml(n)+'</option>';
+  }).join('');
+  selV.value = cobFilter.v;
+  document.getElementById('cob-filter-estado').value = cobFilter.e;
+
+  const q = normKey(cobFilter.q);
+  const rows = cobList().filter(function(c){
+    if(cobFilter.v && (c.vendedor||'Sin vendedor')!==cobFilter.v) return false;
+    const s = cobSaldo(c), d = daysUntil(c.vencimiento);
+    if(cobFilter.e==='pend' && s<=0) return false;
+    if(cobFilter.e==='venc' && !(s>0 && d<0)) return false;
+    if(cobFilter.e==='prox' && !(s>0 && d>=0 && d<=7)) return false;
+    if(cobFilter.e==='cob' && s>0) return false;
+    if(q && normKey((c.cliente||'')+' '+(c.documento||'')).indexOf(q)===-1) return false;
+    return true;
+  }).sort(function(a,b){ return a.vencimiento.localeCompare(b.vencimiento); });
+  const t = document.getElementById('cob-table');
+  if(rows.length===0){
+    t.innerHTML = '<tr><td class="empty" style="border:none;">No hay cobranzas para este filtro.</td></tr>';
+    return;
+  }
+  let totSaldo = 0;
+  t.innerHTML = '<tr><th>Cliente</th><th>Vendedor</th><th>Documento</th><th class="mono">Vencimiento</th><th>Estado</th><th class="mono">Monto</th><th class="mono">Cobrado</th><th class="mono">Saldo</th><th style="text-align:right;">Acciones</th></tr>' +
+    rows.map(function(c){
+      const s = cobSaldo(c), d = daysUntil(c.vencimiento);
+      totSaldo += s;
+      let badge;
+      if(s<=0) badge = '<span class="pill">Cobrada</span>';
+      else if(d<0) badge = '<span class="badge badge-late">'+Math.abs(d)+' día'+(Math.abs(d)===1?'':'s')+' vencida</span>';
+      else if(d<=7) badge = '<span class="badge badge-warn">Vence en '+d+' d</span>';
+      else badge = '<span class="badge badge-ok">Al día</span>';
+      return '<tr><td>'+escapeHtml(c.cliente)+(c.nota?'<div style="font-size:11px;color:var(--ink-400);">'+escapeHtml(c.nota)+'</div>':'')+'</td><td>'+escapeHtml(c.vendedor||'Sin vendedor')+'</td><td>'+escapeHtml(c.documento||'—')+'</td><td class="mono">'+formatDate(c.vencimiento)+'</td><td>'+badge+'</td><td class="mono">'+money(c.monto)+'</td><td class="mono">'+money(c.cobrado||0)+'</td><td class="mono">'+money(s)+'</td>' +
+        '<td style="text-align:right;white-space:nowrap;">' +
+          (s>0 ? '<button class="icon-btn" title="Registrar cobro parcial" onclick="openCobParcial(\''+c.id+'\')">½</button> <button class="icon-btn" title="Marcar como cobrada" onclick="cobrarTotal(\''+c.id+'\')">✓</button> ' : '<button class="icon-btn" title="Volver a pendiente" onclick="reabrirCob(\''+c.id+'\')">↺</button> ') +
+          '<button class="icon-btn" title="Cliente interno: no cargar más sus facturas" onclick="cobIgnoreCliente(\''+c.id+'\')">🚫</button> <button class="icon-btn" title="Editar" onclick="editCob(\''+c.id+'\')">✎</button> <button class="icon-btn danger" title="Eliminar" onclick="deleteCob(\''+c.id+'\')">✕</button>' +
+        '</td></tr>';
+    }).join('') +
+    '<tr class="total-row"><td colspan="7">Total saldo del filtro</td><td class="mono">'+money(totSaldo)+'</td><td></td></tr>';
+}
+function openCobModal(c){
+  document.getElementById('cob-modal-title').textContent = c ? 'Editar cobranza' : 'Nueva cobranza';
+  document.getElementById('cb-id').value = c ? c.id : '';
+  document.getElementById('cb-cliente').value = c ? c.cliente : '';
+  document.getElementById('cb-vendedor').value = c ? (c.vendedor||'') : (cobFilter.v && cobFilter.v!=='Sin vendedor' ? cobFilter.v : '');
+  document.getElementById('cb-documento').value = c ? (c.documento||'') : '';
+  document.getElementById('cb-emision').value = c ? (c.emision||'') : '';
+  document.getElementById('cb-vencimiento').value = c ? c.vencimiento : '';
+  document.getElementById('cb-monto').value = c ? c.monto : '';
+  document.getElementById('cb-cobrado').value = c ? (c.cobrado||0) : 0;
+  document.getElementById('cb-nota').value = c ? (c.nota||'') : '';
+  document.getElementById('cob-overlay').classList.add('open');
+}
+function closeCobModal(){
+  document.getElementById('cob-overlay').classList.remove('open');
+  document.getElementById('cob-form').reset();
+}
+function saveCob(e){
+  if(e && e.preventDefault) e.preventDefault();
+  const cliente = document.getElementById('cb-cliente').value.trim();
+  const monto = parseFloat(document.getElementById('cb-monto').value);
+  const venc = document.getElementById('cb-vencimiento').value;
+  const faltantes = [];
+  if(!cliente) faltantes.push('Cliente');
+  if(isNaN(monto) || monto<=0) faltantes.push('Monto (sin puntos ni comas)');
+  if(!venc) faltantes.push('Vencimiento');
+  if(faltantes.length>0){
+    appAlert('Faltan completar estos campos antes de guardar:\n\n- '+faltantes.join('\n- '));
+    return false;
+  }
+  let cobrado = parseFloat(document.getElementById('cb-cobrado').value);
+  if(isNaN(cobrado) || cobrado<0) cobrado = 0;
+  if(cobrado>monto) cobrado = monto;
+  const id = document.getElementById('cb-id').value || uid('cb');
+  const data = {
+    id:id, cliente:cliente,
+    vendedor: document.getElementById('cb-vendedor').value.trim() || 'Sin vendedor',
+    documento: document.getElementById('cb-documento').value.trim(),
+    emision: document.getElementById('cb-emision').value,
+    vencimiento: venc, monto:monto, cobrado:cobrado,
+    nota: document.getElementById('cb-nota').value.trim()
+  };
+  const idx = cobranzas.findIndex(function(c){ return c.id===id; });
+  if(idx>=0){
+    data.cobros = cobranzas[idx].cobros || [];
+    if(cobrado > (cobranzas[idx].cobrado||0)) addCobro(data, cobrado - (cobranzas[idx].cobrado||0));
+    cobranzas[idx] = data;
+  }else{
+    data.cobros = [];
+    addCobro(data, cobrado);
+    cobranzas.push(data);
+  }
+  persistCobranzas();
+  closeCobModal();
+  renderAll();
+  return false;
+}
+function editCob(id){ const c = cobranzas.find(function(c){ return c.id===id; }); if(c) openCobModal(c); }
+function deleteCob(id){
+  appConfirm('¿Eliminar esta cobranza del registro? Esta acción no se puede deshacer.', function(){
+    cobranzas = cobranzas.filter(function(c){ return c.id!==id; });
+    persistCobranzas();
+    renderAll();
+  });
+}
+function clearAllCobranzas(){
+  if(cobranzas.length===0){ appAlert('No hay cobranzas cargadas.'); return; }
+  appConfirm('¿Eliminar TODAS las cobranzas ('+cobranzas.length+')? Esta acción no se puede deshacer. Si querés conservar una copia, exportá antes una copia de seguridad.', function(){
+    cobranzas = [];
+    persistCobranzas();
+    renderAll();
+  });
+}
+function cobrarTotal(id){
+  const c = cobranzas.find(function(c){ return c.id===id; });
+  if(!c) return;
+  addCobro(c, cobSaldo(c));
+  c.cobrado = c.monto;
+  persistCobranzas();
+  renderAll();
+}
+function reabrirCob(id){
+  const c = cobranzas.find(function(c){ return c.id===id; });
+  if(!c) return;
+  c.cobrado = 0;
+  c.cobros = [];
+  persistCobranzas();
+  renderAll();
+}
+let cobParcialId = null;
+function openCobParcial(id){
+  const c = cobranzas.find(function(c){ return c.id===id; });
+  if(!c) return;
+  cobParcialId = id;
+  document.getElementById('cobpar-sub').textContent = c.cliente+' — saldo pendiente: '+money(cobSaldo(c));
+  document.getElementById('cobpar-monto').value = '';
+  document.getElementById('cobpar-overlay').classList.add('open');
+}
+function closeCobParcial(){
+  document.getElementById('cobpar-overlay').classList.remove('open');
+  cobParcialId = null;
+}
+function confirmarCobParcial(){
+  const c = cobranzas.find(function(c){ return c.id===cobParcialId; });
+  if(!c) return;
+  const m = parseFloat(document.getElementById('cobpar-monto').value);
+  if(isNaN(m) || m<=0){ appAlert('Ingresá un monto válido mayor a cero.'); return; }
+  const aplicado = Math.min(m, cobSaldo(c));
+  addCobro(c, aplicado);
+  c.cobrado = Math.min(c.monto, (c.cobrado||0) + m);
+  persistCobranzas();
+  closeCobParcial();
+  renderAll();
+}
+
+/* ---- importación de cobranzas desde Excel ---- */
+const COB_ALIASES = {
+  cliente: ['cliente','razon social','nombre cliente','nombre','deudor','denominacion','nombre del cliente','cliente nombre'],
+  vendedor: ['vendedor','vend','representante','comercial','agente','nombre vendedor','vendedor asignado','cobrador','promotor','ejecutivo'],
+  documento: ['documento','factura','nro factura','numero factura','n factura','nro documento','n documento','comprobante','nro comprobante','numero de documento','factura n','doc','numero','nro'],
+  vencimiento: ['vencimiento','fecha de vencimiento','fecha vencimiento','fecha venc','vto','fecha vto','vence','fec venc','fec vencimiento','f vencimiento'],
+  monto: ['saldo','saldo pendiente','saldo actual','monto pendiente','importe pendiente','monto a cobrar','monto','importe','total','deuda'],
+  emision: ['emision','fecha emision','fecha de emision','fecha factura','fecha documento','fec emision','fecha']
+};
+function detectCobColumns(headers){
+  const used = [];
+  function take(key, opts){
+    opts = opts||{}; opts.used = used;
+    const i = guessColumn(headers, COB_ALIASES[key], opts);
+    if(i>=0) used.push(i);
+    return i;
+  }
+  const venc = take('vencimiento');
+  let monto = guessColumn(headers, ['saldo','saldo pendiente','saldo actual','monto pendiente','importe pendiente','monto a cobrar'], {used:used, exactOnly:true});
+  if(monto>=0) used.push(monto); else monto = take('monto');
+  const cliente = take('cliente');
+  const vendedor = take('vendedor');
+  const documento = take('documento');
+  const emision = take('emision');
+  // monto original de la factura (el saldo es lo que queda por cobrar)
+  let total = guessColumn(headers, ['monto','monto total','importe','importe total','total factura','monto factura','total'], {used:used, exactOnly:true});
+  if(total===monto) total = -1;
+  return {cliente:cliente, vendedor:vendedor, documento:documento, vencimiento:venc, monto:monto, emision:emision, total:total};
+}
+function findCobHeaderRow(aoa){
+  let best = -1, bestScore = 0, firstNonEmpty = 0, foundFirst = false;
+  for(let r=0; r<Math.min(aoa.length,25); r++){
+    const row = (aoa[r]||[]).map(function(v){ return String(v==null?'':v).trim(); });
+    if(!row.some(function(v){ return v!==''; })) continue;
+    if(!foundFirst){ firstNonEmpty = r; foundFirst = true; }
+    const d = detectCobColumns(row);
+    const score = [d.cliente,d.vendedor,d.vencimiento,d.monto].filter(function(i){ return i>=0; }).length;
+    if(score>bestScore){ bestScore = score; best = r; }
+    if(score>=4) break;
+  }
+  return (best>=0 && bestScore>=2) ? best : firstNonEmpty;
+}
+let cobWorkbook = null, cobHeaders = [], cobRows = [], cobRowNums = [];
+let cobParsed = null, cobSel = {}, cobSupSel = {};
+function triggerCobImport(){ document.getElementById('cob-import-input').click(); }
+function handleCobExcelSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      cobWorkbook = readWorkbookSmart(new Uint8Array(ev.target.result));
+      const names = cobWorkbook ? cobWorkbook.SheetNames.filter(function(n){ return !!cobWorkbook.Sheets[n]; }) : [];
+      if(names.length===0){ appAlert('El archivo no tiene ninguna hoja legible. Verificá que sea un Excel válido.'); return; }
+      cobSel = {}; cobSupSel = {}; cobCliIgn = {};
+      document.getElementById('ci-hasta').value = cobConfig.repHasta || '';
+      document.getElementById('ci-cerrar').checked = !!cobConfig.repHasta;
+      document.getElementById('ci-sheet').innerHTML = names.map(function(n){ return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>'; }).join('');
+      onCobSheetChange();
+      document.getElementById('cobimp-overlay').classList.add('open');
+    }catch(err){
+      console.error(err);
+      appAlert('No se pudo leer el archivo. Verificá que sea un Excel (.xlsx o .xls) válido.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+function cobCell(row,i){ return (i>=0 && row[i]!=null) ? row[i] : ''; }
+function cobIsGroupRow(row, cols){
+  const first = String(cobCell(row,cols.cliente)).trim();
+  if(!first || /^(total|subtotal|sub total)\b/i.test(first)) return false;
+  if(String(cobCell(row,cols.monto)).trim()!=='') return false;
+  if(String(cobCell(row,cols.vencimiento)).trim()!=='') return false;
+  if(cols.documento>=0 && String(cobCell(row,cols.documento)).trim()!=='') return false;
+  return row.some(function(v,i){ return i!==cols.cliente && typeof v==='number' && v>0; });
+}
+/* Reporte "agrupado": una fila con el nombre del vendedor y debajo sus facturas */
+function cobDetectGrouped(cols){
+  if(cols.vendedor>=0) return false;
+  let grp=0, det=0;
+  cobRows.forEach(function(r){
+    if(cobIsGroupRow(r, cols)) grp++;
+    else if(typeof cobCell(r,cols.monto)==='number' || String(cobCell(r,cols.monto)).trim()!=='') det++;
+  });
+  return grp>=1 && det>=1;
+}
+function onCobSheetChange(){
+  const sheet = cobWorkbook.Sheets[document.getElementById('ci-sheet').value];
+  const aoa = sheet ? XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:true}) : [];
+  const hr = findCobHeaderRow(aoa);
+  cobHeaders = (aoa[hr]||[]).map(function(h){ return String(h==null?'':h).trim(); });
+  cobRows = []; cobRowNums = [];
+  aoa.slice(hr+1).forEach(function(row,k){
+    if(row.some(function(v){ return String(v).trim()!==''; })){ cobRows.push(row); cobRowNums.push(hr+k+2); }
+  });
+  const det = detectCobColumns(cobHeaders);
+  // reporte agrupado: el vendedor no es una columna, así que se ignora la que se haya "adivinado"
+  const saveV = det.vendedor; det.vendedor = -1;
+  if(!cobDetectGrouped(det)) det.vendedor = saveV;
+  function fill(id, idx, allowNone){
+    const sel = document.getElementById(id);
+    sel.innerHTML = (allowNone ? '<option value="-1">(ninguna)</option>' : '') + cobHeaders.map(function(h,i){
+      return '<option value="'+i+'"'+(i===idx?' selected':'')+'>'+escapeHtml(h||('Columna '+(i+1)))+'</option>';
+    }).join('');
+    if(idx===-1 && allowNone) sel.value = '-1';
+  }
+  fill('ci-col-cliente', det.cliente, false);
+  fill('ci-col-vendedor', det.vendedor, true);
+  fill('ci-col-documento', det.documento, true);
+  fill('ci-col-vencimiento', det.vencimiento, false);
+  fill('ci-col-monto', det.monto, false);
+  fill('ci-col-emision', det.emision, true);
+  fill('ci-col-total', det.total, true);
+  refreshCobPreview();
+}
+function cobCols(){
+  function v(id){ return parseInt(document.getElementById(id).value,10); }
+  const c = {cliente:v('ci-col-cliente'), vendedor:v('ci-col-vendedor'), documento:v('ci-col-documento'),
+          vencimiento:v('ci-col-vencimiento'), monto:v('ci-col-monto'), emision:v('ci-col-emision'), total:v('ci-col-total')};
+  // el sistema deja el N° de factura en una columna sin título, justo a la derecha de "Documento" (tipo)
+  c.docnum = -1;
+  if(c.documento>=0 && c.documento+1<cobHeaders.length && !String(cobHeaders[c.documento+1]||'').trim() &&
+     cobRows.some(function(r){ return String(r[c.documento+1]==null?'':r[c.documento+1]).trim()!==''; })) c.docnum = c.documento+1;
+  c.cuota = -1;
+  cobHeaders.forEach(function(h,i){ if(c.cuota<0 && normHdr(h)==='cuota') c.cuota = i; });
+  return c;
+}
+function cobDocString(row, cols){
+  let d = String(cobCell(row, cols.docnum>=0 ? cols.docnum : cols.documento)).trim().replace(/\.0+$/,'');
+  const cu = cols.cuota>=0 ? String(cobCell(row, cols.cuota)).trim() : '';
+  if(d && cu && !/^(0|1|1\/1)$/.test(cu)) d += ' ('+cu+')';
+  return d;
+}
+/* Devuelve {groups:[{key,name,supRep,items,saldo}], omitidas, grouped} */
+function parseCob(){
+  const cols = cobCols();
+  const grouped = cobDetectGrouped(cols);
+  const groups = [], byKey = {}, omitidas = [];
+  function grp(name, sup){
+    name = String(name||'').trim() || 'Sin vendedor';
+    const k = normKey(name);
+    let g = byKey[k];
+    if(!g){ g = byKey[k] = {key:k, name:name, supRep:'', items:[], saldo:0}; groups.push(g); }
+    if(sup && !g.supRep) g.supRep = sup;
+    return g;
+  }
+  let cur = null;
+  cobRows.forEach(function(row,k){
+    const nFila = cobRowNums[k];
+    const cliente = String(cobCell(row,cols.cliente)).trim();
+    const documento = cobDocString(row, cols);
+    if(/^(total|subtotal|sub total)\b/i.test(cliente) || /^(total|subtotal)\b/i.test(documento)) return;
+    if(grouped && cobIsGroupRow(row, cols)){
+      let sup = '';
+      const lim = cols.documento>=0 ? cols.documento : 5;
+      for(let i=0;i<row.length && i<lim && !sup;i++){
+        if(i===cols.cliente) continue;
+        if(typeof row[i]==='string' && row[i].trim()) sup = row[i].trim();
+      }
+      cur = grp(cliente, sup);
+      return;
+    }
+    const monto = cleanNumber(cobCell(row,cols.monto));
+    const emision = toISODate(cobCell(row,cols.emision));
+    const venc = toISODate(cobCell(row,cols.vencimiento)) || emision;
+    if(!cliente){ omitidas.push({fila:nFila, motivo:'sin cliente', detalle:documento}); return; }
+    if(!monto || monto<=0){ omitidas.push({fila:nFila, motivo:'sin saldo', detalle:cliente}); return; }
+    if(!venc){ omitidas.push({fila:nFila, motivo:'sin fecha de vencimiento', detalle:cliente}); return; }
+    const g = grouped ? (cur || grp('Sin vendedor','')) : grp(cobCell(row,cols.vendedor),'');
+    let total = cols.total>=0 ? cleanNumber(cobCell(row,cols.total)) : 0;
+    if(!total || total<monto) total = monto;
+    g.items.push({cliente:cliente, vendedor:g.name, documento:documento, emision:emision, vencimiento:venc, monto:total, saldo:monto});
+    g.saldo += monto;
+  });
+  return {groups:groups, omitidas:omitidas, grouped:grouped};
+}
+function cobBuildIndex(){
+  const byKey = {}, byDoc = {}, cnt = {};
+  cobranzas.forEach(function(c){
+    byKey[cobKey(c)] = c;
+    if(c.documento){ const d = normKey(c.documento); byDoc[d] = c; cnt[d] = (cnt[d]||0)+1; }
+  });
+  return {byKey:byKey, byDoc:byDoc, cnt:cnt};
+}
+/* una factura ya cargada se reconoce por cliente+documento o, si el nombre del cliente cambió, por el N° de documento (si es único) */
+function cobFindExisting(it, idx){
+  const ex = idx.byKey[cobKey(it)];
+  if(ex) return ex;
+  if(it.documento){ const d = normKey(it.documento); if(idx.cnt[d]===1) return idx.byDoc[d]; }
+  return null;
+}
+function cobKey(c){
+  return c.documento ? normKey(c.cliente)+'|'+normKey(c.documento) : normKey(c.cliente)+'|'+c.vencimiento+'|'+c.monto;
+}
+/* ---- nombres y supervisores ---- */
+function cobTokens(s){ return normKey(s).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(t){ return t.length>1; }); }
+function cobSameName(a,b){ const x = cobTokens(a).sort().join(' '), y = cobTokens(b).sort().join(' '); return !!x && x===y; }
+function cobMatchSup(raw){
+  const t = cobTokens(raw);
+  if(!t.length) return '';
+  for(let i=0;i<cobConfig.sups.length;i++){
+    const st = cobTokens(cobConfig.sups[i]);
+    if(st.length && st.every(function(x){ return t.indexOf(x)!==-1; })) return cobConfig.sups[i];
+  }
+  return '';
+}
+function cobSuggestInclude(g, groups){
+  const esSup = groups.some(function(o){ return o.supRep && cobSameName(o.supRep, g.name); });
+  return !(/\b(empresa|empleado|empleados)\b/i.test(g.name) || esSup);
+}
+function cobInitSel(groups){
+  groups.forEach(function(g){
+    if(cobSel[g.key]===undefined){
+      cobSel[g.key] = Object.prototype.hasOwnProperty.call(cobConfig.excl, g.key) ? !cobConfig.excl[g.key] : cobSuggestInclude(g, groups);
+    }
+    if(cobSupSel[g.key]===undefined){
+      cobSupSel[g.key] = Object.prototype.hasOwnProperty.call(cobConfig.asg, g.key) ? cobConfig.asg[g.key] : cobMatchSup(g.supRep);
+    }
+  });
+}
+function cobSelAll(mode){
+  if(!cobParsed) return;
+  cobParsed.groups.forEach(function(g){
+    cobSel[g.key] = mode==='all' ? true : mode==='none' ? false : cobSuggestInclude(g, cobParsed.groups);
+  });
+  renderCobGroups();
+}
+function cobToggleSel(i, v){ cobSel[cobParsed.groups[i].key] = !!v; cobUpdateSummary(); }
+function cobSetSup(i, v){ cobSupSel[cobParsed.groups[i].key] = v; }
+function renderCobGroups(){
+  const res = cobParsed;
+  const box = document.getElementById('cobimp-groups-wrap');
+  if(!res || res.groups.length===0){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  document.getElementById('cobimp-grouped-note').textContent = res.grouped
+    ? 'El reporte viene agrupado por vendedor. Marcá los vendedores cuyas cobranzas querés cargar; los demás se ignoran (la próxima vez se recuerda tu elección).'
+    : 'Marcá los vendedores cuyas cobranzas querés cargar; los demás se ignoran.';
+  document.getElementById('cobimp-groups').innerHTML =
+    '<tr><th style="width:34px;"></th><th>Vendedor</th><th>Supervisor en el reporte</th><th>Asignar a supervisor</th><th class="mono">Documentos</th><th class="mono">Saldo</th></tr>' +
+    res.groups.map(function(g,i){
+      const opts = '<option value="">Sin supervisor</option>' + cobConfig.sups.map(function(x){
+        return '<option value="'+escapeHtml(x)+'"'+(cobSupSel[g.key]===x?' selected':'')+'>'+escapeHtml(x)+'</option>';
+      }).join('');
+      return '<tr><td><input type="checkbox" '+(cobSel[g.key]?'checked ':'')+'onchange="cobToggleSel('+i+',this.checked)"></td><td>'+escapeHtml(g.name)+'</td><td>'+escapeHtml(g.supRep||'—')+'</td><td><select onchange="cobSetSup('+i+',this.value)">'+opts+'</select></td><td class="mono">'+g.items.length+'</td><td class="mono">'+money(g.saldo)+'</td></tr>';
+    }).join('');
+  cobUpdateSummary();
+}
+let cobCliIgn = {}, cobCliCand = [];
+function cobPersonNames(){
+  const n = [];
+  if(cobParsed) cobParsed.groups.forEach(function(g){ n.push(g.name); if(g.supRep) n.push(g.supRep); });
+  Object.keys(cobConfig.names).forEach(function(k){ n.push(cobConfig.names[k]); });
+  cobConfig.sups.forEach(function(x){ n.push(x); });
+  return n;
+}
+function cobLooksInternal(cliente, names){
+  const t = cobTokens(cliente);
+  if(t.length<2) return false;
+  return names.some(function(nm){ const nt = cobTokens(nm); return t.every(function(x){ return nt.indexOf(x)!==-1; }); });
+}
+function cobBuildCli(){
+  const names = cobPersonNames(), m = {};
+  cobParsed.groups.forEach(function(g){ g.items.forEach(function(it){
+    const k = normKey(it.cliente);
+    const inList = Object.prototype.hasOwnProperty.call(cobConfig.cliExcl, k);
+    if(!inList && !cobLooksInternal(it.cliente, names)) return;
+    const o = m[k] = m[k] || {key:k, name:it.cliente, motivo:inList?'En tu lista de internos':'Coincide con un vendedor o supervisor', docs:0, saldo:0};
+    o.docs++; o.saldo += it.saldo;
+  }); });
+  cobCliCand = Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return b.saldo-a.saldo; });
+  cobCliCand.forEach(function(o){ if(cobCliIgn[o.key]===undefined) cobCliIgn[o.key] = true; });
+}
+function renderCobCli(){
+  const box = document.getElementById('cobimp-cli-wrap');
+  if(cobCliCand.length===0){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  document.getElementById('cobimp-cli').innerHTML =
+    '<tr><th style="width:34px;"></th><th>Cliente</th><th>Motivo</th><th class="mono">Documentos</th><th class="mono">Saldo</th></tr>' +
+    cobCliCand.map(function(o,i){
+      return '<tr><td><input type="checkbox" '+(cobCliIgn[o.key]?'checked ':'')+'onchange="cobCliToggle('+i+',this.checked)" title="Marcado = no cargar"></td><td>'+escapeHtml(o.name)+'</td><td>'+escapeHtml(o.motivo)+'</td><td class="mono">'+o.docs+'</td><td class="mono">'+money(o.saldo)+'</td></tr>';
+    }).join('');
+}
+function cobCliToggle(i, v){ cobCliIgn[cobCliCand[i].key] = !!v; cobUpdateSummary(); }
+function cobIncludedItems(){
+  const out = [];
+  if(cobParsed) cobParsed.groups.forEach(function(g){ if(cobSel[g.key]) g.items.forEach(function(it){ if(!cobCliIgn[normKey(it.cliente)]) out.push(it); }); });
+  return out;
+}
+function cobUpdateSummary(){
+  const res = cobParsed;
+  const items = cobIncludedItems();
+  const t = document.getElementById('cobimp-preview');
+  if(!res || cobRows.length===0){
+    t.innerHTML = '<tr><td class="empty" style="border:none;">La hoja no tiene filas de datos.</td></tr>';
+  }else if(items.length===0){
+    t.innerHTML = '<tr><td class="empty" style="border:none;">No hay cobranzas para importar con la selección actual.</td></tr>';
+  }else{
+    t.innerHTML = '<tr><th>Cliente</th><th>Vendedor</th><th>Documento</th><th class="mono">Vencimiento</th><th class="mono">Monto</th><th class="mono">Saldo</th></tr>' +
+      items.slice(0,8).map(function(it){
+        return '<tr><td>'+escapeHtml(it.cliente)+'</td><td>'+escapeHtml(it.vendedor)+'</td><td>'+escapeHtml(it.documento||'—')+'</td><td class="mono">'+formatDate(it.vencimiento)+'</td><td class="mono">'+money(it.monto)+'</td><td class="mono">'+money(it.saldo)+'</td></tr>';
+      }).join('');
+  }
+  const nV = res ? res.groups.filter(function(g){ return cobSel[g.key] && g.items.length>0; }).length : 0;
+  const tot = items.reduce(function(a,it){ return a+it.saldo; },0);
+  const idx = cobBuildIndex(), seen = {};
+  let nNew=0, nUpd=0, nDup=0;
+  items.forEach(function(it){
+    const k = cobKey(it);
+    if(seen[k]){ nDup++; return; }
+    seen[k] = true;
+    if(cobFindExisting(it, idx)) nUpd++; else nNew++;
+  });
+  let txt = (items.length-nDup)+' cobranza(s) de '+nV+' vendedor(es) · '+nNew+' nuevas, '+nUpd+' ya cargadas (se actualizan, no se duplican) · '+money(tot);
+  if(nDup) txt += ' · '+nDup+' repetida(s) dentro del archivo';
+  let nInt = 0;
+  if(res) res.groups.forEach(function(g){ if(cobSel[g.key]) g.items.forEach(function(it){ if(cobCliIgn[normKey(it.cliente)]) nInt++; }); });
+  if(nInt) txt += ' · '+nInt+' factura(s) internas ignoradas';
+  if(res && res.omitidas.length) txt += ' · '+res.omitidas.length+' fila(s) se omitirán (' + res.omitidas.slice(0,3).map(function(o){ return 'fila '+o.fila+': '+o.motivo; }).join(', ') + (res.omitidas.length>3?'…':'') + ')';
+  document.getElementById('cobimp-count').textContent = txt;
+  // cobranzas ya cargadas de vendedores desmarcados
+  const exKeys = {};
+  if(res) res.groups.forEach(function(g){ if(!cobSel[g.key]) exKeys[g.key] = true; });
+  const yaCargadas = cobranzas.filter(function(c){ return exKeys[normKey(c.vendedor||'Sin vendedor')]; }).length;
+  document.getElementById('ci-quitar-wrap').style.display = yaCargadas>0 ? 'flex' : 'none';
+  document.getElementById('ci-quitar-txt').textContent = 'Quitar de la app las '+yaCargadas+' cobranza(s) que ya estaban cargadas de los vendedores desmarcados.';
+}
+function refreshCobPreview(){
+  cobParsed = parseCob();
+  cobInitSel(cobParsed.groups);
+  cobBuildCli();
+  renderCobCli();
+  renderCobGroups();
+}
+function closeCobImport(){ document.getElementById('cobimp-overlay').classList.remove('open'); }
+function confirmCobImport(){
+  const res = cobParsed || parseCob();
+  const incl = {}, excl = {};
+  res.groups.forEach(function(g){ if(cobSel[g.key]) incl[g.key] = true; else excl[g.key] = true; });
+  // recordar elección y supervisor de cada vendedor del reporte
+  res.groups.forEach(function(g){
+    cobConfig.names[g.key] = g.name;
+    cobConfig.excl[g.key] = !cobSel[g.key];
+    cobConfig.asg[g.key] = cobSupSel[g.key] || '';
+  });
+  const ignKeys = {};
+  cobCliCand.forEach(function(o){
+    if(cobCliIgn[o.key]){ ignKeys[o.key] = true; cobConfig.cliExcl[o.key] = o.name; }
+    else delete cobConfig.cliExcl[o.key];
+  });
+  persistCobConfig();
+  const items = cobIncludedItems();
+  const cerrar = document.getElementById('ci-cerrar').checked;
+  const quitar = document.getElementById('ci-quitar').checked;
+  const antesInt = cobranzas.length;
+  cobranzas = cobranzas.filter(function(c){ return !ignKeys[normKey(c.cliente)] && !cobConfig.cliExcl[normKey(c.cliente)]; });
+  const quitadasInt = antesInt - cobranzas.length;
+  const hasta = document.getElementById('ci-hasta').value || '';
+  cobConfig.repHasta = hasta;
+  persistCobConfig();
+  const idx = cobBuildIndex(), seenFile = {};
+  const vistas = {};
+  let nuevas=0, actualizadas=0, cerradas=0, quitadas=0, repetidas=0;
+  items.forEach(function(it){
+    const k = cobKey(it);
+    if(seenFile[k]){ repetidas++; return; }
+    seenFile[k] = true;
+    const ex = cobFindExisting(it, idx);
+    if(ex){
+      const saldoAntes = cobSaldo(ex);
+      if(it.saldo < saldoAntes) addCobro(ex, saldoAntes - it.saldo);
+      ex.vendedor = it.vendedor; ex.vencimiento = it.vencimiento; ex.cliente = it.cliente; if(it.documento) ex.documento = it.documento;
+      if(it.emision) ex.emision = it.emision;
+      ex.monto = it.monto; ex.cobrado = Math.max(0, it.monto - it.saldo);
+      vistas[ex.id] = true;
+      actualizadas++;
+    }else{
+      const nuevo = {id:uid('cb'), cliente:it.cliente, vendedor:it.vendedor, documento:it.documento, emision:it.emision||'', vencimiento:it.vencimiento, monto:it.monto, cobrado:Math.max(0, it.monto - it.saldo), nota:''};
+      cobranzas.push(nuevo);
+      idx.byKey[k] = nuevo;
+      if(nuevo.documento){ const d = normKey(nuevo.documento); idx.byDoc[d] = nuevo; idx.cnt[d] = (idx.cnt[d]||0)+1; }
+      vistas[nuevo.id] = true;
+      nuevas++;
+    }
+  });
+  if(cerrar){
+    // solo entre los vendedores incluidos en este reporte
+    cobranzas.forEach(function(c){
+      if(!vistas[c.id] && incl[normKey(c.vendedor||'Sin vendedor')] && cobSaldo(c)>0 && (!hasta || c.vencimiento<=hasta)){ addCobro(c, cobSaldo(c)); c.cobrado = c.monto; cerradas++; }
+    });
+  }
+  if(quitar){
+    const antes = cobranzas.length;
+    cobranzas = cobranzas.filter(function(c){ return !excl[normKey(c.vendedor||'Sin vendedor')]; });
+    quitadas = antes - cobranzas.length;
+  }
+  persistCobranzas();
+  closeCobImport();
+  renderAll();
+  let msg = 'Importación completa: '+nuevas+' cobranza(s) nueva(s)';
+  if(actualizadas>0) msg += ', '+actualizadas+' ya existente(s) actualizada(s) con el saldo y vencimiento del Excel';
+  msg += '.';
+  const nExcl = Object.keys(excl).length;
+  if(quitadasInt>0) msg += '\nSe quitaron '+quitadasInt+' factura(s) internas que estaban cargadas de antes.';
+  if(repetidas>0) msg += '\n'+repetidas+' fila(s) repetida(s) dentro del archivo se contaron una sola vez.';
+  if(nExcl>0) msg += '\nSe ignoraron '+nExcl+' vendedor(es) que no marcaste.';
+  if(quitadas>0) msg += '\nSe quitaron '+quitadas+' cobranza(s) cargadas antes de esos vendedores.';
+  if(cerradas>0) msg += '\n'+cerradas+' cobranza(s) que ya no figuraban en el Excel se marcaron como cobradas.';
+  if(res.omitidas.length>0){
+    msg += '\n'+res.omitidas.length+' fila(s) no se importaron:';
+    res.omitidas.slice(0,12).forEach(function(o){ msg += '\n · Fila '+o.fila+' del Excel: '+o.motivo+(o.detalle?' ('+o.detalle+')':''); });
+    if(res.omitidas.length>12) msg += '\n · … y '+(res.omitidas.length-12)+' más.';
+  }
+  appAlert(msg);
+}
+
+/* ---- supervisores ---- */
+function cobSupOfName(name){ return cobConfig.asg[normKey(name||'Sin vendedor')] || 'Sin supervisor'; }
+function cobSupOf(c){ return cobSupOfName(c.vendedor||'Sin vendedor'); }
+function cobList(){ return cobFilter.s ? cobranzas.filter(function(c){ return cobSupOf(c)===cobFilter.s; }) : cobranzas; }
+function fillSupFilters(){
+  if(cobFilter.s && cobFilter.s!=='Sin supervisor' && cobConfig.sups.indexOf(cobFilter.s)===-1) cobFilter.s = '';
+  const html = '<option value="">Todos los supervisores</option>' + cobConfig.sups.map(function(x){
+    return '<option value="'+escapeHtml(x)+'"'+(x===cobFilter.s?' selected':'')+'>'+escapeHtml(x)+'</option>';
+  }).join('') + '<option value="Sin supervisor"'+(cobFilter.s==='Sin supervisor'?' selected':'')+'>Sin supervisor</option>';
+  ['cob-filter-sup','cobest-filter-sup'].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el){ el.innerHTML = html; el.value = cobFilter.s; }
+  });
+}
+function setCobSup(v){
+  cobFilter.s = v;
+  cobFilter.v = '';
+  renderActivePanel();
+}
+function cobGoSup(i){
+  const names = cobSupSummaryNames[i];
+  cobFilter.s = names; cobFilter.v = '';
+  switchTab('cobranzas');
+}
+let cobSupSummaryNames = [], cobSupRows = [];
+function cobAllVendedores(){
+  const m = {};
+  cobranzas.forEach(function(c){
+    const n = (c.vendedor||'Sin vendedor').trim(), k = normKey(n);
+    const o = m[k] = m[k] || {key:k, name:n, docs:0, pend:0, total:0};
+    o.total++;
+    const sd = cobSaldo(c);
+    if(sd>0){ o.docs++; o.pend += sd; }
+  });
+  [cobConfig.names, cobConfig.asg, cobConfig.excl].forEach(function(src){
+    Object.keys(src).forEach(function(k){
+      if(!m[k]) m[k] = {key:k, name:(cobConfig.names[k]||k), docs:0, pend:0, total:0};
+    });
+  });
+  return Object.keys(m).map(function(k){ return m[k]; });
+}
+function renderCobSupTab(){
+  const today = todayISOStr(), curYm = today.slice(0,7);
+  const vend = cobAllVendedores();
+  // resumen por supervisor
+  const bySup = {};
+  cobConfig.sups.concat(['Sin supervisor']).forEach(function(x){ bySup[x] = {vend:0, docs:0, pend:0, venc:0}; });
+  vend.forEach(function(v){ if(v.total>0){ const x = bySup[cobConfig.asg[v.key]] ? cobConfig.asg[v.key] : 'Sin supervisor'; bySup[x].vend++; } });
+  cobranzas.forEach(function(c){
+    const sd = cobSaldo(c); if(sd<=0) return;
+    let x = cobSupOf(c); if(!bySup[x]) x = 'Sin supervisor';
+    bySup[x].docs++; bySup[x].pend += sd;
+    if(daysUntil(c.vencimiento)<0) bySup[x].venc += sd;
+  });
+  cobSupSummaryNames = cobConfig.sups.concat(['Sin supervisor']).filter(function(x){ return x!=='Sin supervisor' || bySup[x].docs>0 || bySup[x].vend>0; });
+  const T = {v:0, d:0, p:0, ve:0, est:0, cob:0, tot:0};
+  document.getElementById('cs-resumen').innerHTML =
+    '<tr><th>Supervisor</th><th class="mono">Vendedores</th><th class="mono">Documentos</th><th class="mono">Pendiente</th><th class="mono">Vencido</th><th class="mono">% vencido</th><th class="mono">Estimado a cobrar (mes)</th><th class="mono">Ya cobrado (mes)</th><th class="mono">Total esperado</th></tr>' +
+    cobSupSummaryNames.map(function(x,i){
+      const o = bySup[x], e = cobEstimate(curYm, undefined, x) || {estimado:0, cobrado:0, total:0};
+      T.v+=o.vend; T.d+=o.docs; T.p+=o.pend; T.ve+=o.venc; T.est+=e.estimado; T.cob+=e.cobrado; T.tot+=e.total;
+      return '<tr class="row-click" onclick="cobGoSup('+i+')" title="Ver sus cobranzas"><td>'+escapeHtml(x)+'</td><td class="mono">'+o.vend+'</td><td class="mono">'+o.docs+'</td><td class="mono">'+money(o.pend)+'</td><td class="mono" style="'+(o.venc>0?'color:#c1432a;':'')+'">'+money(o.venc)+'</td><td class="mono">'+(o.pend>0?(o.venc/o.pend*100).toFixed(0)+' %':'—')+'</td><td class="mono">'+money(e.estimado)+'</td><td class="mono">'+money(e.cobrado)+'</td><td class="mono">'+money(e.total)+'</td></tr>';
+    }).join('') +
+    '<tr class="total-row"><td>Total</td><td class="mono">'+T.v+'</td><td class="mono">'+T.d+'</td><td class="mono">'+money(T.p)+'</td><td class="mono">'+money(T.ve)+'</td><td class="mono">'+(T.p>0?(T.ve/T.p*100).toFixed(0)+' %':'—')+'</td><td class="mono">'+money(T.est)+'</td><td class="mono">'+money(T.cob)+'</td><td class="mono">'+money(T.tot)+'</td></tr>';
+  // lista de supervisores
+  document.getElementById('cs-sups').innerHTML =
+    '<tr><th>Supervisor</th><th class="mono">Vendedores asignados</th><th style="text-align:right;">Acciones</th></tr>' +
+    (cobConfig.sups.length===0 ? '<tr><td class="empty" colspan="3" style="border:none;">Todavía no hay supervisores. Agregá el primero arriba.</td></tr>' :
+    cobConfig.sups.map(function(x,i){
+      const n = Object.keys(cobConfig.asg).filter(function(k){ return cobConfig.asg[k]===x && !cobConfig.excl[k]; }).length;
+      return '<tr><td><input type="text" value="'+escapeHtml(x)+'" onchange="cobRenameSup('+i+',this.value)" style="width:100%;max-width:320px;"></td><td class="mono">'+n+'</td><td style="text-align:right;"><button class="icon-btn danger" title="Quitar supervisor" onclick="cobRemoveSup('+i+')">✕</button></td></tr>';
+    }).join(''));
+  // vendedores
+  cobSupRows = vend.slice().sort(function(a,b){
+    const sa = cobConfig.asg[a.key]||'~', sb = cobConfig.asg[b.key]||'~';
+    return sa.localeCompare(sb) || a.name.localeCompare(b.name);
+  });
+  renderCobCliList();
+  const sinSup = cobSupRows.filter(function(r){ return !cobConfig.asg[r.key] && !cobConfig.excl[r.key]; }).length;
+  document.getElementById('cs-bulk-info').textContent = sinSup+' vendedor(es) sin supervisor';
+  document.getElementById('cs-bulk-sup').innerHTML = cobConfig.sups.map(function(x){ return '<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>'; }).join('');
+  const t = document.getElementById('cs-vendedores');
+  if(cobSupRows.length===0){
+    t.innerHTML = '<tr><td class="empty" style="border:none;"><b>Todavía no hay vendedores</b>Cuando importes el reporte de cobranzas van a aparecer acá para que los asignes a cada supervisor.</td></tr>';
+  }else{
+    t.innerHTML = '<tr><th>Vendedor</th><th class="mono">Documentos</th><th class="mono">Pendiente</th><th>Supervisor</th><th style="text-align:center;">Se importa</th></tr>' +
+      cobSupRows.map(function(r,i){
+        const cur = cobConfig.asg[r.key] || '';
+        const opts = '<option value="">Sin supervisor</option>' + cobConfig.sups.map(function(x){
+          return '<option value="'+escapeHtml(x)+'"'+(cur===x?' selected':'')+'>'+escapeHtml(x)+'</option>';
+        }).join('') + (cur && cobConfig.sups.indexOf(cur)===-1 ? '<option value="'+escapeHtml(cur)+'" selected>'+escapeHtml(cur)+'</option>' : '');
+        const off = !!cobConfig.excl[r.key];
+        return '<tr'+(off?' style="opacity:.55;"':'')+'><td>'+escapeHtml(r.name)+'</td><td class="mono">'+r.docs+'</td><td class="mono">'+money(r.pend)+'</td><td><select onchange="cobSetAsg('+i+',this.value)">'+opts+'</select></td><td style="text-align:center;"><input type="checkbox" '+(off?'':'checked ')+'onchange="cobToggleImporta('+i+',this.checked)"></td></tr>';
+      }).join('');
+  }
+}
+function cobIgnoreCliente(id){
+  const c = cobranzas.find(function(x){ return x.id===id; });
+  if(!c) return;
+  const k = normKey(c.cliente);
+  const n = cobranzas.filter(function(x){ return normKey(x.cliente)===k; }).length;
+  appConfirm('«'+c.cliente+'» es un cliente interno. Se quitan sus '+n+' factura(s) y no se vuelven a cargar al importar el reporte. ¿Continuar?', function(){
+    cobConfig.cliExcl[k] = c.cliente;
+    cobranzas = cobranzas.filter(function(x){ return normKey(x.cliente)!==k; });
+    persistCobConfig(); persistCobranzas();
+    renderAll();
+  });
+}
+function cobUnignoreCliente(k){
+  delete cobConfig.cliExcl[k];
+  persistCobConfig();
+  renderAll();
+}
+function renderCobCliList(){
+  const ks = Object.keys(cobConfig.cliExcl);
+  document.getElementById('cs-clientes').innerHTML = ks.length===0 ? '<tr><td class="empty" style="border:none;">Todavía no marcaste clientes internos.</td></tr>' :
+    '<tr><th>Cliente</th><th style="text-align:right;">Acciones</th></tr>' + ks.sort().map(function(k){
+      return '<tr><td>'+escapeHtml(cobConfig.cliExcl[k])+'</td><td style="text-align:right;"><button class="btn-ghost btn-small" onclick="cobUnignoreCliente(\''+k.replace(/'/g,"\\'")+'\')">Volver a cargar sus facturas</button></td></tr>';
+    }).join('');
+}
+function cobAddSup(){
+  const el = document.getElementById('cs-new');
+  const n = el.value.trim();
+  if(!n) return;
+  if(cobConfig.sups.some(function(x){ return normKey(x)===normKey(n); })){ appAlert('Ese supervisor ya está en la lista.'); return; }
+  cobConfig.sups.push(n);
+  el.value = '';
+  persistCobConfig();
+  renderAll();
+}
+function cobRenameSup(i, v){
+  v = v.trim();
+  const old = cobConfig.sups[i];
+  if(!v || v===old){ renderCobSupTab(); return; }
+  if(cobConfig.sups.some(function(x,j){ return j!==i && normKey(x)===normKey(v); })){ appAlert('Ya existe un supervisor con ese nombre.'); renderCobSupTab(); return; }
+  cobConfig.sups[i] = v;
+  Object.keys(cobConfig.asg).forEach(function(k){ if(cobConfig.asg[k]===old) cobConfig.asg[k] = v; });
+  if(cobFilter.s===old) cobFilter.s = v;
+  persistCobConfig();
+  renderAll();
+}
+function cobRemoveSup(i){
+  const x = cobConfig.sups[i];
+  appConfirm('¿Quitar a «'+x+'» de la lista? Sus vendedores quedan sin supervisor.', function(){
+    cobConfig.sups.splice(i,1);
+    Object.keys(cobConfig.asg).forEach(function(k){ if(cobConfig.asg[k]===x) cobConfig.asg[k] = ''; });
+    if(cobFilter.s===x) cobFilter.s = '';
+    persistCobConfig();
+    renderAll();
+  });
+}
+function cobSetAsg(i, v){
+  const r = cobSupRows[i];
+  cobConfig.names[r.key] = r.name;
+  cobConfig.asg[r.key] = v;
+  persistCobConfig();
+  renderAll();
+}
+function cobAssignBulk(){
+  const v = document.getElementById('cs-bulk-sup').value;
+  if(!v){ appAlert('Primero agregá al menos un supervisor.'); return; }
+  let n = 0;
+  cobSupRows.forEach(function(r){
+    if(!cobConfig.asg[r.key] && !cobConfig.excl[r.key]){ cobConfig.names[r.key] = r.name; cobConfig.asg[r.key] = v; n++; }
+  });
+  if(n===0){ appAlert('No hay vendedores sin supervisor.'); return; }
+  persistCobConfig();
+  renderAll();
+}
+function cobToggleImporta(i, checked){
+  const r = cobSupRows[i];
+  cobConfig.names[r.key] = r.name;
+  cobConfig.excl[r.key] = !checked;
+  persistCobConfig();
+  const cargadas = cobranzas.filter(function(c){ return normKey(c.vendedor||'Sin vendedor')===r.key; }).length;
+  if(!checked && cargadas>0){
+    appConfirm('«'+r.name+'» ya no se va a importar. ¿Quitar también las '+cargadas+' cobranza(s) que ya están cargadas?', function(){
+      cobranzas = cobranzas.filter(function(c){ return normKey(c.vendedor||'Sin vendedor')!==r.key; });
+      persistCobranzas();
+      renderAll();
+    });
+  }
+  renderAll();
+}
+
+/* =====================================================================
+   RESUMEN DEL DÍA
+   ===================================================================== */
+function renderResumenTab(){
+  const today = todayISOStr();
+  document.getElementById('res-fecha').textContent = formatDate(today);
+  const obl = allObligaciones();
+  const hoyItems = obl.filter(function(it){ return it.fechaEfectiva===today; }).sort(function(a,b){ return b.monto-a.monto; });
+  const hoyTot = hoyItems.reduce(function(a,it){ return a+it.monto; },0);
+  const chAtr = obl.filter(function(it){ return (it.fuente==='Cheque' || it.fuente==='ChequeGrupo') && it.fechaEfectiva<today; });
+  const cuotasVenc = obl.filter(function(it){ return it.fuente==='Prestamo' && it.fechaEfectiva<today; });
+  const lim = addDaysISO(today, 7);
+  const prox = obl.filter(function(it){ return it.fechaEfectiva>today && it.fechaEfectiva<=lim; });
+  const sum = function(a){ return a.reduce(function(s,it){ return s+it.monto; },0); };
+  const cs = cobStats();
+  document.getElementById('res-summary').innerHTML =
+    '<div class="stat"><div class="stat-label">Para pagar hoy</div><div class="stat-value">'+money(hoyTot)+'</div><div class="stat-sub">'+hoyItems.length+' obligación(es)</div></div>' +
+    '<div class="stat'+(chAtr.length?' alert':'')+'"><div class="stat-label">Cheques atrasados sin pagar</div><div class="stat-value">'+money(sum(chAtr))+'</div><div class="stat-sub">'+chAtr.length+' cheque(s)</div></div>' +
+    '<div class="stat'+(cuotasVenc.length?' alert':'')+'"><div class="stat-label">Cuotas de préstamos vencidas</div><div class="stat-value">'+money(sum(cuotasVenc))+'</div><div class="stat-sub">'+cuotasVenc.length+' cuota(s)</div></div>' +
+    '<div class="stat"><div class="stat-label">A pagar en los próximos 7 días</div><div class="stat-value">'+money(sum(prox))+'</div><div class="stat-sub">'+prox.length+' obligación(es)</div></div>' +
+    '<div class="stat'+(cs.vencido>0?' alert':'')+'"><div class="stat-label">Cobranzas vencidas</div><div class="stat-value">'+money(cs.vencido)+'</div></div>' +
+    '<div class="stat"><div class="stat-label">Cobranzas que vencen en 7 días</div><div class="stat-value">'+money(cs.porVencer)+'</div></div>';
+  const th = document.getElementById('res-hoy');
+  if(hoyItems.length===0){
+    th.innerHTML = '<tr><td class="empty" style="border:none;">No hay pagos programados para hoy.</td></tr>';
+  }else{
+    th.innerHTML = '<tr><th>Fuente</th><th>Entidad</th><th>Detalle</th><th class="mono">Monto</th><th style="text-align:right;">Acciones</th></tr>' +
+      hoyItems.map(function(it){
+        return '<tr><td>'+escapeHtml(it.fuenteLabel)+'</td><td>'+escapeHtml(it.entidad)+'</td><td>'+escapeHtml(it.detalle)+'</td><td class="mono">'+money(it.monto)+'</td><td style="text-align:right;"><button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td></tr>';
+      }).join('') + '<tr class="total-row"><td colspan="3">Total de hoy</td><td class="mono">'+money(hoyTot)+'</td><td></td></tr>';
+  }
+  const byV = {};
+  cobranzas.forEach(function(c){
+    const s = cobSaldo(c);
+    if(s<=0 || daysUntil(c.vencimiento)>=0) return;
+    const v = c.vendedor || 'Sin vendedor';
+    const o = byV[v] = byV[v] || {docs:0, vencido:0};
+    o.docs++; o.vencido += s;
+  });
+  const names = Object.keys(byV).sort(function(a,b){ return byV[b].vencido-byV[a].vencido; });
+  const tc = document.getElementById('res-cob');
+  if(names.length===0){
+    tc.innerHTML = '<tr><td class="empty" style="border:none;">No hay cobranzas vencidas.</td></tr>';
+  }else{
+    tc.innerHTML = '<tr><th>Vendedor</th><th class="mono">Documentos vencidos</th><th class="mono">Monto vencido</th></tr>' +
+      names.map(function(n){ return '<tr><td>'+escapeHtml(n)+'</td><td class="mono">'+byV[n].docs+'</td><td class="mono">'+money(byV[n].vencido)+'</td></tr>'; }).join('');
+  }
+}
+
+
+loadCobParams();
 loadLoans();
 </script>
 <script>

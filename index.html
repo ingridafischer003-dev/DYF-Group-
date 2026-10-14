@@ -863,14 +863,9 @@
 <div class="overlay" id="cobexp-overlay">
   <div class="modal">
     <h3>Descargar reporte de cobranzas</h3>
-    <p class="modal-sub">Genera un Excel con el estado actual de la app (cobros registrados, saldos y vencimientos al día de hoy), listo para enviar por correo.</p>
+    <p class="modal-sub">Genera un solo Excel con el estado actual de la app (cobros registrados, saldos y vencimientos al día de hoy), listo para enviar por correo.</p>
     <div class="form-row"><label>Supervisor</label>
       <select id="cobexp-sup"></select></div>
-    <div class="form-row" id="cobexp-modo-row"><label>Cuando elegís “Todos”</label>
-      <select id="cobexp-modo">
-        <option value="sep">Un archivo por cada supervisor (para enviar a cada uno)</option>
-        <option value="uno">Un solo archivo con todo</option>
-      </select></div>
     <div class="form-row"><label>Qué facturas incluir</label>
       <select id="cobexp-est">
         <option value="pend">Solo pendientes (con saldo)</option>
@@ -5539,12 +5534,10 @@ function confirmCobImport(){
 /* ===== Descargar reporte de cobranzas (Excel) ===== */
 function openCobExport(){
   const sel = document.getElementById('cobexp-sup');
-  const opts = ['<option value="">Todos los supervisores</option>'].concat(cobConfig.sups.map(function(x){ return '<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>'; }));
+  const opts = ['<option value="">Todos (una hoja por supervisor + resumen general)</option>'].concat(cobConfig.sups.map(function(x){ return '<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>'; }));
   opts.push('<option value="Sin supervisor">Sin supervisor</option>');
   sel.innerHTML = opts.join('');
   sel.value = cobFilter.s || '';
-  sel.onchange = function(){ document.getElementById('cobexp-modo-row').style.display = sel.value ? 'none' : ''; };
-  sel.onchange();
   document.getElementById('cobexp-est').value = (cobFilter.e==='venc'||cobFilter.e==='todas') ? cobFilter.e : 'pend';
   document.getElementById('cobexp-overlay').classList.add('open');
 }
@@ -5557,106 +5550,41 @@ function cobEstadoTexto(c){
   if(d<=7) return 'Vence en '+d+' día'+(d===1?'':'s');
   return 'Al día';
 }
-function cobBuildWorkbookPlain(items, supName, est){
-  const hoy = todayISOStr(), ym = hoy.slice(0,7);
-  const filtered = items.filter(function(c){
-    const s = cobSaldo(c), d = daysUntil(c.vencimiento);
-    if(est==='pend') return s>0;
-    if(est==='venc') return s>0 && d<0;
-    return true;
-  }).sort(function(a,b){ return (a.vencimiento||'').localeCompare(b.vencimiento||'') || (a.cliente||'').localeCompare(b.cliente||''); });
-  const byV = {};
-  filtered.forEach(function(c){ const v = c.vendedor||'Sin vendedor'; (byV[v] = byV[v]||[]).push(c); });
-  const vendNames = Object.keys(byV).sort(function(a,b){ return a.localeCompare(b); });
-  const fechaTxt = formatDate(hoy);
-  const hasta = cobConfig.repHasta ? ' · Reporte del sistema cargado hasta el '+formatDate(cobConfig.repHasta) : '';
-  const titulo = [[COMPANY_NAME+' · Reporte de cobranzas'],['Supervisor: '+(supName||'Todos')],['Emitido el '+fechaTxt+hasta+' · Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')],[]];
-
-  // --- Resumen por vendedor ---
-  const res = titulo.map(function(r){ return r.slice(); });
-  res.push(['Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido','Cobrado en el mes']);
-  let T = {n:0, m:0, cb:0, s:0, v:0, mes:0};
-  vendNames.forEach(function(v){
-    let n=0,m=0,cb=0,sd=0,vc=0,mes=0;
-    byV[v].forEach(function(c){
-      const s = cobSaldo(c); n++; m += c.monto||0; cb += c.cobrado||0; sd += s;
-      if(s>0 && daysUntil(c.vencimiento)<0) vc += s;
-      mes += cobCobradoEnMes(c, ym);
-    });
-    res.push([v, n, m, cb, sd, vc, sd>0 ? vc/sd : 0, mes]);
-    T.n+=n; T.m+=m; T.cb+=cb; T.s+=sd; T.v+=vc; T.mes+=mes;
-  });
-  res.push(['TOTAL', T.n, T.m, T.cb, T.s, T.v, T.s>0 ? T.v/T.s : 0, T.mes]);
-  const wsR = XLSX.utils.aoa_to_sheet(res);
-  wsR['!cols'] = [{wch:34},{wch:10},{wch:18},{wch:18},{wch:18},{wch:18},{wch:11},{wch:18}];
-  const r0 = titulo.length + 1;
-  for(let r=r0; r<res.length; r++){
-    [2,3,4,5,7].forEach(function(c){ const a = XLSX.utils.encode_cell({r:r,c:c}); if(wsR[a]) wsR[a].z = '#,##0'; });
-    const a6 = XLSX.utils.encode_cell({r:r,c:6}); if(wsR[a6]) wsR[a6].z = '0%';
-  }
-
-  // --- Detalle agrupado por vendedor ---
-  const det = titulo.map(function(r){ return r.slice(); });
-  det.push(['Cliente','Documento','Emisión','Vencimiento','Estado','Monto','Cobrado','Saldo','Último cobro','Nota']);
-  const fmtD = function(d){ return d ? formatDate(d) : ''; };
-  vendNames.forEach(function(v){
-    det.push(['VENDEDOR: '+v]);
-    let sm=0, sc=0, ss=0;
-    byV[v].forEach(function(c){
-      const s = cobSaldo(c);
-      const ult = (c.cobros||[]).reduce(function(a,x){ return (x.f||'')>a ? x.f : a; }, '');
-      det.push([c.cliente||'', c.documento||'', fmtD(c.emision), fmtD(c.vencimiento), cobEstadoTexto(c), c.monto||0, c.cobrado||0, s, fmtD(ult), c.nota||'']);
-      sm += c.monto||0; sc += c.cobrado||0; ss += s;
-    });
-    det.push(['Subtotal '+v, '', '', '', '', sm, sc, ss, '', '']);
-    det.push([]);
-  });
-  det.push(['TOTAL GENERAL','','','','',T.m,T.cb,T.s,'','']);
-  const wsD = XLSX.utils.aoa_to_sheet(det);
-  wsD['!cols'] = [{wch:38},{wch:20},{wch:12},{wch:13},{wch:20},{wch:16},{wch:16},{wch:16},{wch:13},{wch:30}];
-  for(let r=titulo.length+1; r<det.length; r++){
-    [5,6,7].forEach(function(c){ const a = XLSX.utils.encode_cell({r:r,c:c}); if(wsD[a] && typeof wsD[a].v==='number') wsD[a].z = '#,##0'; });
-  }
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen');
-  XLSX.utils.book_append_sheet(wb, wsD, 'Detalle');
-  return {wb: wb, count: filtered.length};
-}
-
 /* Excel con formato (encabezado azul, vendedores en negrita con su saldo en rojo, fechas y montos reales) */
 function cobXDate(iso){ if(!iso) return null; const a = String(iso).slice(0,10).split('-'); return new Date(Date.UTC(+a[0], +a[1]-1, +a[2])); }
-function cobBuildStyled(items, supName, est){
-  const hoy = todayISOStr(), ym = hoy.slice(0,7);
-  const filtered = items.filter(function(c){
+
+const COB_BLUE = 'FF0070C0', COB_RED = 'FFC00000', COB_FONT = 'Calibri';
+function cobHdrCells(row, rightFrom, rightTo){
+  row.height = 18;
+  row.eachCell(function(cell, k){
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COB_BLUE}};
+    cell.font = {name:COB_FONT, size:10, bold:true, color:{argb:'FFFFFFFF'}};
+    cell.alignment = {vertical:'middle', horizontal: (k>=rightFrom && k<=rightTo) ? 'right' : 'left'};
+  });
+}
+function cobFilterItems(items, est){
+  return items.filter(function(c){
     const s = cobSaldo(c), d = daysUntil(c.vencimiento);
     if(est==='pend') return s>0;
     if(est==='venc') return s>0 && d<0;
     return true;
   }).sort(function(a,b){ return (a.cliente||'').localeCompare(b.cliente||'') || (a.vencimiento||'').localeCompare(b.vencimiento||''); });
+}
+/* Una hoja con las cobranzas de un supervisor. Devuelve los totales por vendedor para el resumen general. */
+function cobAddSupSheet(wb, supName, filtered){
+  const ym = todayISOStr().slice(0,7);
   const byV = {};
   filtered.forEach(function(c){ const v = c.vendedor||'Sin vendedor'; (byV[v] = byV[v]||[]).push(c); });
   const vendNames = Object.keys(byV).sort(function(a,b){ return a.localeCompare(b); });
-  const BLUE = 'FF0070C0', RED = 'FFC00000', FONT = 'Calibri';
-  const wb = new ExcelJS.Workbook(); wb.creator = COMPANY_NAME; wb.created = new Date();
-  const hdrStyle = function(row){
-    row.height = 18;
-    row.eachCell(function(cell){
-      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:BLUE}};
-      cell.font = {name:FONT, size:10, bold:true, color:{argb:'FFFFFFFF'}};
-      cell.alignment = {vertical:'middle', horizontal: cell.col>=5 && cell.col<=8 ? 'right' : 'left'};
-    });
-  };
-  // ---------- Hoja principal ----------
-  const ws = wb.addWorksheet('Cobranzas', {views:[{state:'frozen', ySplit:1}]});
+  let nombre = String(supName||'Cobranzas').replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,31) || 'Cobranzas';
+  const ws = wb.addWorksheet(nombre, {views:[{state:'frozen', ySplit:1}]});
   ws.columns = [
     {header:'Cliente', width:46}, {header:'Documento', width:20}, {header:'Fecha', width:12}, {header:'Vencimiento', width:13},
     {header:'Días', width:8}, {header:'Monto', width:17}, {header:'Cobrado', width:17}, {header:'Saldo', width:17}, {header:'$', width:6}, {header:'Observación', width:34}
   ];
-  hdrStyle(ws.getRow(1));
-  ws.getRow(1).getCell(9).alignment = {horizontal:'left', vertical:'middle'};
+  cobHdrCells(ws.getRow(1), 5, 8);
   const NUM = '#,##0.00', DT = 'dd/mm/yyyy';
-  let tM=0, tC=0, tS=0, tV=0, nDocs=0;
-  const resumen = [];
+  const out = []; let tM=0, tC=0, tS=0;
   vendNames.forEach(function(v){
     const list = byV[v];
     let sm=0, sc=0, sd=0, vc=0, mes=0;
@@ -5665,62 +5593,81 @@ function cobBuildStyled(items, supName, est){
       if(s>0 && daysUntil(c.vencimiento)<0) vc += s;
       mes += cobCobradoEnMes(c, ym);
     });
-    const g = ws.addRow([v, cobSupOfName(v), '', '', '', '', '', sd, '', '']);
-    g.font = {name:FONT, size:10, bold:true};
-    g.getCell(2).font = {name:FONT, size:10, bold:false};
-    g.getCell(8).font = {name:FONT, size:10, bold:true, color:{argb:RED}};
+    const g = ws.addRow([v, supName||'', '', '', '', '', '', sd, '', '']);
+    g.font = {name:COB_FONT, size:10, bold:true};
+    g.getCell(2).font = {name:COB_FONT, size:10, bold:false};
+    g.getCell(8).font = {name:COB_FONT, size:10, bold:true, color:{argb:COB_RED}};
     g.getCell(8).numFmt = NUM; g.getCell(8).alignment = {horizontal:'right'};
     list.forEach(function(c){
       const s = cobSaldo(c), d = daysUntil(c.vencimiento);
       const ult = (c.cobros||[]).reduce(function(a,x){ return (x.f||'')>a ? x.f : a; }, '');
       const obs = [c.nota||'', ult ? 'Último cobro: '+formatDate(ult) : ''].filter(Boolean).join(' · ');
       const r = ws.addRow([c.cliente||'', c.documento||'', cobXDate(c.emision), cobXDate(c.vencimiento), (s>0 && d<0) ? -d : 0, c.monto||0, c.cobrado||0, s, 'Gs.', obs]);
-      r.font = {name:FONT, size:10};
+      r.font = {name:COB_FONT, size:10};
       r.getCell(3).numFmt = DT; r.getCell(4).numFmt = DT;
       r.getCell(3).alignment = {horizontal:'left'}; r.getCell(4).alignment = {horizontal:'left'};
       r.getCell(5).alignment = {horizontal:'right'};
       [6,7,8].forEach(function(k){ r.getCell(k).numFmt = NUM; });
-      if(s<=0){ r.eachCell(function(cell){ cell.font = {name:FONT, size:10, color:{argb:'FF7F7F7F'}}; }); }
-      else if(d<0){ r.getCell(5).font = {name:FONT, size:10, color:{argb:RED}, bold:true}; }
+      if(s<=0){ r.eachCell(function(cell){ cell.font = {name:COB_FONT, size:10, color:{argb:'FF7F7F7F'}}; }); }
+      else if(d<0){ r.getCell(5).font = {name:COB_FONT, size:10, color:{argb:COB_RED}, bold:true}; }
     });
-    resumen.push([v, list.length, sm, sc, sd, vc, sd>0 ? vc/sd : 0, mes]);
-    tM+=sm; tC+=sc; tS+=sd; tV+=vc; nDocs += list.length;
+    out.push({v:v, n:list.length, m:sm, cb:sc, sd:sd, vc:vc, mes:mes});
+    tM+=sm; tC+=sc; tS+=sd;
   });
-  const tot = ws.addRow(['TOTAL GENERAL','','','','',tM,tC,tS,'','']);
-  tot.font = {name:FONT, size:10, bold:true};
+  const tot = ws.addRow(['TOTAL '+(supName||''),'','','','',tM,tC,tS,'','']);
+  tot.font = {name:COB_FONT, size:10, bold:true};
   [6,7,8].forEach(function(k){ tot.getCell(k).numFmt = NUM; });
   tot.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
   ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:10}};
   ws.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:'1:1', paperSize:9};
-
-  // ---------- Hoja Resumen ----------
-  const wr = wb.addWorksheet('Resumen');
-  wr.columns = [{width:40},{width:11},{width:18},{width:18},{width:18},{width:18},{width:11},{width:18}];
+  return out;
+}
+/* groups: [{sup, items}] -> un solo libro: una hoja por supervisor + "Resumen general" al final */
+function cobBuildWorkbook(groups, est, titulo){
+  const wb = new ExcelJS.Workbook(); wb.creator = COMPANY_NAME; wb.created = new Date();
+  const hoy = todayISOStr();
+  const sheets = []; let count = 0;
+  groups.forEach(function(g){
+    const f = cobFilterItems(g.items, est);
+    if(!f.length) return;
+    count += f.length;
+    sheets.push({sup: g.sup, vend: cobAddSupSheet(wb, g.sup, f)});
+  });
+  if(!count) return {count:0};
+  const wr = wb.addWorksheet('Resumen general');
+  wr.columns = [{width:42},{width:11},{width:18},{width:18},{width:18},{width:18},{width:11},{width:18}];
   const hasta = cobConfig.repHasta ? ' · Reporte del sistema cargado hasta el '+formatDate(cobConfig.repHasta) : '';
-  wr.addRow([COMPANY_NAME+' · Reporte de cobranzas']).font = {name:FONT, size:14, bold:true};
-  wr.addRow(['Supervisor: '+(supName||'Todos')]).font = {name:FONT, size:11, bold:true};
-  wr.addRow(['Emitido el '+formatDate(hoy)+hasta+' · Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')]).font = {name:FONT, size:10, color:{argb:'FF595959'}};
+  wr.addRow([COMPANY_NAME+' · Resumen general de cobranzas']).font = {name:COB_FONT, size:14, bold:true};
+  wr.addRow(['Emitido el '+formatDate(hoy)+hasta]).font = {name:COB_FONT, size:10, color:{argb:'FF595959'}};
+  wr.addRow(['Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')]).font = {name:COB_FONT, size:10, color:{argb:'FF595959'}};
   wr.addRow([]);
-  const hr = wr.addRow(['Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido','Cobrado en el mes']);
-  hr.height = 18;
-  hr.eachCell(function(cell, k){
-    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:BLUE}};
-    cell.font = {name:FONT, size:10, bold:true, color:{argb:'FFFFFFFF'}};
-    cell.alignment = {vertical:'middle', horizontal: k===1 ? 'left' : 'right'};
+  cobHdrCells(wr.addRow(['Supervisor / Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido','Cobrado en el mes']), 2, 8);
+  const money0 = '#,##0';
+  const G = {n:0,m:0,cb:0,sd:0,vc:0,mes:0};
+  sheets.forEach(function(sh){
+    const S = {n:0,m:0,cb:0,sd:0,vc:0,mes:0};
+    sh.vend.forEach(function(x){ Object.keys(S).forEach(function(k){ S[k]+=x[k]; }); });
+    const sr = wr.addRow([sh.sup||'Todos', S.n, S.m, S.cb, S.sd, S.vc, S.sd>0 ? S.vc/S.sd : 0, S.mes]);
+    sr.font = {name:COB_FONT, size:10, bold:true};
+    sr.eachCell({includeEmpty:true}, function(cell){ cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFDDEBF7'}}; });
+    [3,4,5,6,8].forEach(function(k){ sr.getCell(k).numFmt = money0; });
+    sr.getCell(7).numFmt = '0%';
+    sh.vend.forEach(function(x){
+      const r = wr.addRow(['    '+x.v, x.n, x.m, x.cb, x.sd, x.vc, x.sd>0 ? x.vc/x.sd : 0, x.mes]);
+      r.font = {name:COB_FONT, size:10};
+      [3,4,5,6,8].forEach(function(k){ r.getCell(k).numFmt = money0; });
+      r.getCell(7).numFmt = '0%';
+      if(x.vc>0) r.getCell(6).font = {name:COB_FONT, size:10, color:{argb:COB_RED}};
+    });
+    Object.keys(G).forEach(function(k){ G[k]+=S[k]; });
   });
-  resumen.forEach(function(rw){
-    const r = wr.addRow(rw); r.font = {name:FONT, size:10};
-    [3,4,5,6,8].forEach(function(k){ r.getCell(k).numFmt = '#,##0'; });
-    r.getCell(7).numFmt = '0%';
-    if(rw[5]>0) r.getCell(6).font = {name:FONT, size:10, color:{argb:RED}};
-  });
-  const rt = wr.addRow(['TOTAL', nDocs, tM, tC, tS, tV, tS>0 ? tV/tS : 0, resumen.reduce(function(a,x){ return a+x[7]; },0)]);
-  rt.font = {name:FONT, size:10, bold:true};
-  [3,4,5,6,8].forEach(function(k){ rt.getCell(k).numFmt = '#,##0'; });
+  const rt = wr.addRow(['TOTAL GENERAL', G.n, G.m, G.cb, G.sd, G.vc, G.sd>0 ? G.vc/G.sd : 0, G.mes]);
+  rt.font = {name:COB_FONT, size:11, bold:true};
+  [3,4,5,6,8].forEach(function(k){ rt.getCell(k).numFmt = money0; });
   rt.getCell(7).numFmt = '0%';
   rt.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
   wr.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9};
-  return {wbx: wb, count: filtered.length, items: items, supName: supName, est: est};
+  return {wbx: wb, count: count, hojas: sheets.length};
 }
 async function cobDownloadXlsx(o){
   if(o.wbx){
@@ -5734,44 +5681,28 @@ async function cobDownloadXlsx(o){
     XLSX.writeFile(o.wb, o.name);
   }
 }
-function cobBuildWorkbook(items, supName, est){
-  if(typeof ExcelJS!=='undefined'){
-    try{ return cobBuildStyled(items, supName, est); }catch(e){ console.error('excel con formato', e); }
-  }
-  return cobBuildWorkbookPlain(items, supName, est);
-}
 function cobSafeName(x){ return String(x||'Todos').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
 function runCobExport(){
   const supSel = document.getElementById('cobexp-sup').value;
-  const modo = document.getElementById('cobexp-modo').value;
   const est = document.getElementById('cobexp-est').value;
-  const hoy = todayISOStr();
-  const jobs = [];
-  if(supSel){
-    jobs.push({sup: supSel, items: cobranzas.filter(function(c){ return cobSupOf(c)===supSel; })});
-  }else if(modo==='uno'){
-    jobs.push({sup: '', items: cobranzas.slice()});
-  }else{
-    cobConfig.sups.concat(['Sin supervisor']).forEach(function(x){
-      jobs.push({sup: x, items: cobranzas.filter(function(c){ return cobSupOf(c)===x; })});
-    });
-  }
-  const out = [];
-  jobs.forEach(function(j){
-    const r = cobBuildWorkbook(j.items, j.sup, est);
-    if(r.count>0) out.push({name: 'Cobranzas_'+cobSafeName(j.sup||'Todos')+'_'+hoy+'.xlsx', wb: r.wb, wbx: r.wbx, n: r.count});
-  });
-  if(!out.length){ appAlert('No hay facturas para descargar con esa selección.'); return; }
+  if(typeof ExcelJS==='undefined'){ appAlert('Para armar el Excel con formato hace falta conexión a internet (se carga una librería). Conectate y probá de nuevo.'); return; }
+  const groups = supSel
+    ? [{sup: supSel, items: cobranzas.filter(function(c){ return cobSupOf(c)===supSel; })}]
+    : cobConfig.sups.concat(['Sin supervisor']).map(function(x){ return {sup:x, items: cobranzas.filter(function(c){ return cobSupOf(c)===x; })}; });
+  const r = cobBuildWorkbook(groups, est);
+  if(!r.count){ appAlert('No hay facturas para descargar con esa selección.'); return; }
   closeCobExport();
-  out.forEach(function(o,i){ setTimeout(function(){ cobDownloadXlsx(o); }, i*500); });
-  appAlert((out.length>1?'Se descargaron '+out.length+' archivos':'Se descargó 1 archivo')+' de Excel:\n\n- '+out.map(function(o){ return o.name+' ('+o.n+' facturas)'; }).join('\n- ')+(out.length>1?'\n\nSi el navegador te pide permiso para descargar varios archivos, aceptalo.':''));
+  const name = 'Cobranzas_'+cobSafeName(supSel||'General')+'_'+todayISOStr()+'.xlsx';
+  cobDownloadXlsx({wbx: r.wbx, name: name}).then(function(){
+    appAlert('Se descargó '+name+' con '+r.count+' facturas.\n\n'+(r.hojas>1||!supSel ? 'Trae una hoja por supervisor ('+r.hojas+') y al final la hoja "Resumen general".' : 'Trae la hoja del supervisor y la hoja "Resumen general".'));
+  });
 }
 function cobSupOfName(name){ return cobConfig.asg[normKey(name||'Sin vendedor')] || 'Sin supervisor'; }
 function cobSupOf(c){ return cobSupOfName(c.vendedor||'Sin vendedor'); }
 function cobList(){ return cobFilter.s ? cobranzas.filter(function(c){ return cobSupOf(c)===cobFilter.s; }) : cobranzas; }
 function fillSupFilters(){
   if(cobFilter.s && cobFilter.s!=='Sin supervisor' && cobConfig.sups.indexOf(cobFilter.s)===-1) cobFilter.s = '';
-  const html = '<option value="">Todos los supervisores</option>' + cobConfig.sups.map(function(x){
+  const html = '<option value="">Todos (una hoja por supervisor + resumen general)</option>' + cobConfig.sups.map(function(x){
     return '<option value="'+escapeHtml(x)+'"'+(x===cobFilter.s?' selected':'')+'>'+escapeHtml(x)+'</option>';
   }).join('') + '<option value="Sin supervisor"'+(cobFilter.s==='Sin supervisor'?' selected':'')+'>Sin supervisor</option>';
   ['cob-filter-sup','cobest-filter-sup'].forEach(function(id){

@@ -468,6 +468,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-ghost btn-small danger" onclick="clearAllCobranzas()">Vaciar todas</button>
           <button class="btn-primary btn-small" onclick="triggerCobImport()">📥 Importar desde Excel</button>
+          <button class="btn-primary btn-small" onclick="openCobExport()">📤 Descargar reporte</button>
           <input type="file" id="cob-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleCobExcelSelect(event)">
           <button class="btn-primary" onclick="openCobModal()">+ Nueva cobranza</button>
         </div>
@@ -858,6 +859,30 @@
 </div>
 
 <!-- Modal: ajustar orientación antes de leer el documento -->
+<div class="overlay" id="cobexp-overlay">
+  <div class="modal">
+    <h3>Descargar reporte de cobranzas</h3>
+    <p class="modal-sub">Genera un Excel con el estado actual de la app (cobros registrados, saldos y vencimientos al día de hoy), listo para enviar por correo.</p>
+    <div class="form-row"><label>Supervisor</label>
+      <select id="cobexp-sup"></select></div>
+    <div class="form-row" id="cobexp-modo-row"><label>Cuando elegís “Todos”</label>
+      <select id="cobexp-modo">
+        <option value="sep">Un archivo por cada supervisor (para enviar a cada uno)</option>
+        <option value="uno">Un solo archivo con todo</option>
+      </select></div>
+    <div class="form-row"><label>Qué facturas incluir</label>
+      <select id="cobexp-est">
+        <option value="pend">Solo pendientes (con saldo)</option>
+        <option value="venc">Solo vencidas</option>
+        <option value="todas">Todas (incluye las ya cobradas)</option>
+      </select></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeCobExport()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="runCobExport()">Descargar Excel</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="rotate-overlay">
   <div class="modal">
     <h3>Ajustar orientación del documento</h3>
@@ -5509,6 +5534,119 @@ function confirmCobImport(){
 }
 
 /* ---- supervisores ---- */
+
+/* ===== Descargar reporte de cobranzas (Excel) ===== */
+function openCobExport(){
+  const sel = document.getElementById('cobexp-sup');
+  const opts = ['<option value="">Todos los supervisores</option>'].concat(cobConfig.sups.map(function(x){ return '<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>'; }));
+  opts.push('<option value="Sin supervisor">Sin supervisor</option>');
+  sel.innerHTML = opts.join('');
+  sel.value = cobFilter.s || '';
+  sel.onchange = function(){ document.getElementById('cobexp-modo-row').style.display = sel.value ? 'none' : ''; };
+  sel.onchange();
+  document.getElementById('cobexp-est').value = (cobFilter.e==='venc'||cobFilter.e==='todas') ? cobFilter.e : 'pend';
+  document.getElementById('cobexp-overlay').classList.add('open');
+}
+function closeCobExport(){ document.getElementById('cobexp-overlay').classList.remove('open'); }
+function cobEstadoTexto(c){
+  const s = cobSaldo(c), d = daysUntil(c.vencimiento);
+  if(s<=0) return 'Cobrada';
+  if(d<0) return 'Vencida ('+Math.abs(d)+' día'+(Math.abs(d)===1?'':'s')+')';
+  if(d===0) return 'Vence hoy';
+  if(d<=7) return 'Vence en '+d+' día'+(d===1?'':'s');
+  return 'Al día';
+}
+function cobBuildWorkbook(items, supName, est){
+  const hoy = todayISOStr(), ym = hoy.slice(0,7);
+  const filtered = items.filter(function(c){
+    const s = cobSaldo(c), d = daysUntil(c.vencimiento);
+    if(est==='pend') return s>0;
+    if(est==='venc') return s>0 && d<0;
+    return true;
+  }).sort(function(a,b){ return (a.vencimiento||'').localeCompare(b.vencimiento||'') || (a.cliente||'').localeCompare(b.cliente||''); });
+  const byV = {};
+  filtered.forEach(function(c){ const v = c.vendedor||'Sin vendedor'; (byV[v] = byV[v]||[]).push(c); });
+  const vendNames = Object.keys(byV).sort(function(a,b){ return a.localeCompare(b); });
+  const fechaTxt = formatDate(hoy);
+  const hasta = cobConfig.repHasta ? ' · Reporte del sistema cargado hasta el '+formatDate(cobConfig.repHasta) : '';
+  const titulo = [[COMPANY_NAME+' · Reporte de cobranzas'],['Supervisor: '+(supName||'Todos')],['Emitido el '+fechaTxt+hasta+' · Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')],[]];
+
+  // --- Resumen por vendedor ---
+  const res = titulo.map(function(r){ return r.slice(); });
+  res.push(['Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido','Cobrado en el mes']);
+  let T = {n:0, m:0, cb:0, s:0, v:0, mes:0};
+  vendNames.forEach(function(v){
+    let n=0,m=0,cb=0,sd=0,vc=0,mes=0;
+    byV[v].forEach(function(c){
+      const s = cobSaldo(c); n++; m += c.monto||0; cb += c.cobrado||0; sd += s;
+      if(s>0 && daysUntil(c.vencimiento)<0) vc += s;
+      mes += cobCobradoEnMes(c, ym);
+    });
+    res.push([v, n, m, cb, sd, vc, sd>0 ? vc/sd : 0, mes]);
+    T.n+=n; T.m+=m; T.cb+=cb; T.s+=sd; T.v+=vc; T.mes+=mes;
+  });
+  res.push(['TOTAL', T.n, T.m, T.cb, T.s, T.v, T.s>0 ? T.v/T.s : 0, T.mes]);
+  const wsR = XLSX.utils.aoa_to_sheet(res);
+  wsR['!cols'] = [{wch:34},{wch:10},{wch:18},{wch:18},{wch:18},{wch:18},{wch:11},{wch:18}];
+  const r0 = titulo.length + 1;
+  for(let r=r0; r<res.length; r++){
+    [2,3,4,5,7].forEach(function(c){ const a = XLSX.utils.encode_cell({r:r,c:c}); if(wsR[a]) wsR[a].z = '#,##0'; });
+    const a6 = XLSX.utils.encode_cell({r:r,c:6}); if(wsR[a6]) wsR[a6].z = '0%';
+  }
+
+  // --- Detalle agrupado por vendedor ---
+  const det = titulo.map(function(r){ return r.slice(); });
+  det.push(['Cliente','Documento','Emisión','Vencimiento','Estado','Monto','Cobrado','Saldo','Último cobro','Nota']);
+  const fmtD = function(d){ return d ? formatDate(d) : ''; };
+  vendNames.forEach(function(v){
+    det.push(['VENDEDOR: '+v]);
+    let sm=0, sc=0, ss=0;
+    byV[v].forEach(function(c){
+      const s = cobSaldo(c);
+      const ult = (c.cobros||[]).reduce(function(a,x){ return (x.f||'')>a ? x.f : a; }, '');
+      det.push([c.cliente||'', c.documento||'', fmtD(c.emision), fmtD(c.vencimiento), cobEstadoTexto(c), c.monto||0, c.cobrado||0, s, fmtD(ult), c.nota||'']);
+      sm += c.monto||0; sc += c.cobrado||0; ss += s;
+    });
+    det.push(['Subtotal '+v, '', '', '', '', sm, sc, ss, '', '']);
+    det.push([]);
+  });
+  det.push(['TOTAL GENERAL','','','','',T.m,T.cb,T.s,'','']);
+  const wsD = XLSX.utils.aoa_to_sheet(det);
+  wsD['!cols'] = [{wch:38},{wch:20},{wch:12},{wch:13},{wch:20},{wch:16},{wch:16},{wch:16},{wch:13},{wch:30}];
+  for(let r=titulo.length+1; r<det.length; r++){
+    [5,6,7].forEach(function(c){ const a = XLSX.utils.encode_cell({r:r,c:c}); if(wsD[a] && typeof wsD[a].v==='number') wsD[a].z = '#,##0'; });
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen');
+  XLSX.utils.book_append_sheet(wb, wsD, 'Detalle');
+  return {wb: wb, count: filtered.length};
+}
+function cobSafeName(x){ return String(x||'Todos').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function runCobExport(){
+  const supSel = document.getElementById('cobexp-sup').value;
+  const modo = document.getElementById('cobexp-modo').value;
+  const est = document.getElementById('cobexp-est').value;
+  const hoy = todayISOStr();
+  const jobs = [];
+  if(supSel){
+    jobs.push({sup: supSel, items: cobranzas.filter(function(c){ return cobSupOf(c)===supSel; })});
+  }else if(modo==='uno'){
+    jobs.push({sup: '', items: cobranzas.slice()});
+  }else{
+    cobConfig.sups.concat(['Sin supervisor']).forEach(function(x){
+      jobs.push({sup: x, items: cobranzas.filter(function(c){ return cobSupOf(c)===x; })});
+    });
+  }
+  const out = [];
+  jobs.forEach(function(j){
+    const r = cobBuildWorkbook(j.items, j.sup, est);
+    if(r.count>0) out.push({name: 'Cobranzas_'+cobSafeName(j.sup||'Todos')+'_'+hoy+'.xlsx', wb: r.wb, n: r.count});
+  });
+  if(!out.length){ appAlert('No hay facturas para descargar con esa selección.'); return; }
+  closeCobExport();
+  out.forEach(function(o,i){ setTimeout(function(){ XLSX.writeFile(o.wb, o.name); }, i*500); });
+  appAlert((out.length>1?'Se descargaron '+out.length+' archivos':'Se descargó 1 archivo')+' de Excel:\n\n- '+out.map(function(o){ return o.name+' ('+o.n+' facturas)'; }).join('\n- ')+(out.length>1?'\n\nSi el navegador te pide permiso para descargar varios archivos, aceptalo.':''));
+}
 function cobSupOfName(name){ return cobConfig.asg[normKey(name||'Sin vendedor')] || 'Sin supervisor'; }
 function cobSupOf(c){ return cobSupOfName(c.vendedor||'Sin vendedor'); }
 function cobList(){ return cobFilter.s ? cobranzas.filter(function(c){ return cobSupOf(c)===cobFilter.s; }) : cobranzas; }

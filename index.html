@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -5556,7 +5557,7 @@ function cobEstadoTexto(c){
   if(d<=7) return 'Vence en '+d+' día'+(d===1?'':'s');
   return 'Al día';
 }
-function cobBuildWorkbook(items, supName, est){
+function cobBuildWorkbookPlain(items, supName, est){
   const hoy = todayISOStr(), ym = hoy.slice(0,7);
   const filtered = items.filter(function(c){
     const s = cobSaldo(c), d = daysUntil(c.vencimiento);
@@ -5621,6 +5622,124 @@ function cobBuildWorkbook(items, supName, est){
   XLSX.utils.book_append_sheet(wb, wsD, 'Detalle');
   return {wb: wb, count: filtered.length};
 }
+
+/* Excel con formato (encabezado azul, vendedores en negrita con su saldo en rojo, fechas y montos reales) */
+function cobXDate(iso){ if(!iso) return null; const a = String(iso).slice(0,10).split('-'); return new Date(Date.UTC(+a[0], +a[1]-1, +a[2])); }
+function cobBuildStyled(items, supName, est){
+  const hoy = todayISOStr(), ym = hoy.slice(0,7);
+  const filtered = items.filter(function(c){
+    const s = cobSaldo(c), d = daysUntil(c.vencimiento);
+    if(est==='pend') return s>0;
+    if(est==='venc') return s>0 && d<0;
+    return true;
+  }).sort(function(a,b){ return (a.cliente||'').localeCompare(b.cliente||'') || (a.vencimiento||'').localeCompare(b.vencimiento||''); });
+  const byV = {};
+  filtered.forEach(function(c){ const v = c.vendedor||'Sin vendedor'; (byV[v] = byV[v]||[]).push(c); });
+  const vendNames = Object.keys(byV).sort(function(a,b){ return a.localeCompare(b); });
+  const BLUE = 'FF0070C0', RED = 'FFC00000', FONT = 'Calibri';
+  const wb = new ExcelJS.Workbook(); wb.creator = COMPANY_NAME; wb.created = new Date();
+  const hdrStyle = function(row){
+    row.height = 18;
+    row.eachCell(function(cell){
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:BLUE}};
+      cell.font = {name:FONT, size:10, bold:true, color:{argb:'FFFFFFFF'}};
+      cell.alignment = {vertical:'middle', horizontal: cell.col>=5 && cell.col<=8 ? 'right' : 'left'};
+    });
+  };
+  // ---------- Hoja principal ----------
+  const ws = wb.addWorksheet('Cobranzas', {views:[{state:'frozen', ySplit:1}]});
+  ws.columns = [
+    {header:'Cliente', width:46}, {header:'Documento', width:20}, {header:'Fecha', width:12}, {header:'Vencimiento', width:13},
+    {header:'Días', width:8}, {header:'Monto', width:17}, {header:'Cobrado', width:17}, {header:'Saldo', width:17}, {header:'$', width:6}, {header:'Observación', width:34}
+  ];
+  hdrStyle(ws.getRow(1));
+  ws.getRow(1).getCell(9).alignment = {horizontal:'left', vertical:'middle'};
+  const NUM = '#,##0.00', DT = 'dd/mm/yyyy';
+  let tM=0, tC=0, tS=0, tV=0, nDocs=0;
+  const resumen = [];
+  vendNames.forEach(function(v){
+    const list = byV[v];
+    let sm=0, sc=0, sd=0, vc=0, mes=0;
+    list.forEach(function(c){
+      const s = cobSaldo(c); sm += c.monto||0; sc += c.cobrado||0; sd += s;
+      if(s>0 && daysUntil(c.vencimiento)<0) vc += s;
+      mes += cobCobradoEnMes(c, ym);
+    });
+    const g = ws.addRow([v, cobSupOfName(v), '', '', '', '', '', sd, '', '']);
+    g.font = {name:FONT, size:10, bold:true};
+    g.getCell(2).font = {name:FONT, size:10, bold:false};
+    g.getCell(8).font = {name:FONT, size:10, bold:true, color:{argb:RED}};
+    g.getCell(8).numFmt = NUM; g.getCell(8).alignment = {horizontal:'right'};
+    list.forEach(function(c){
+      const s = cobSaldo(c), d = daysUntil(c.vencimiento);
+      const ult = (c.cobros||[]).reduce(function(a,x){ return (x.f||'')>a ? x.f : a; }, '');
+      const obs = [c.nota||'', ult ? 'Último cobro: '+formatDate(ult) : ''].filter(Boolean).join(' · ');
+      const r = ws.addRow([c.cliente||'', c.documento||'', cobXDate(c.emision), cobXDate(c.vencimiento), (s>0 && d<0) ? -d : 0, c.monto||0, c.cobrado||0, s, 'Gs.', obs]);
+      r.font = {name:FONT, size:10};
+      r.getCell(3).numFmt = DT; r.getCell(4).numFmt = DT;
+      r.getCell(3).alignment = {horizontal:'left'}; r.getCell(4).alignment = {horizontal:'left'};
+      r.getCell(5).alignment = {horizontal:'right'};
+      [6,7,8].forEach(function(k){ r.getCell(k).numFmt = NUM; });
+      if(s<=0){ r.eachCell(function(cell){ cell.font = {name:FONT, size:10, color:{argb:'FF7F7F7F'}}; }); }
+      else if(d<0){ r.getCell(5).font = {name:FONT, size:10, color:{argb:RED}, bold:true}; }
+    });
+    resumen.push([v, list.length, sm, sc, sd, vc, sd>0 ? vc/sd : 0, mes]);
+    tM+=sm; tC+=sc; tS+=sd; tV+=vc; nDocs += list.length;
+  });
+  const tot = ws.addRow(['TOTAL GENERAL','','','','',tM,tC,tS,'','']);
+  tot.font = {name:FONT, size:10, bold:true};
+  [6,7,8].forEach(function(k){ tot.getCell(k).numFmt = NUM; });
+  tot.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
+  ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:10}};
+  ws.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:'1:1', paperSize:9};
+
+  // ---------- Hoja Resumen ----------
+  const wr = wb.addWorksheet('Resumen');
+  wr.columns = [{width:40},{width:11},{width:18},{width:18},{width:18},{width:18},{width:11},{width:18}];
+  const hasta = cobConfig.repHasta ? ' · Reporte del sistema cargado hasta el '+formatDate(cobConfig.repHasta) : '';
+  wr.addRow([COMPANY_NAME+' · Reporte de cobranzas']).font = {name:FONT, size:14, bold:true};
+  wr.addRow(['Supervisor: '+(supName||'Todos')]).font = {name:FONT, size:11, bold:true};
+  wr.addRow(['Emitido el '+formatDate(hoy)+hasta+' · Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')]).font = {name:FONT, size:10, color:{argb:'FF595959'}};
+  wr.addRow([]);
+  const hr = wr.addRow(['Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido','Cobrado en el mes']);
+  hr.height = 18;
+  hr.eachCell(function(cell, k){
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:BLUE}};
+    cell.font = {name:FONT, size:10, bold:true, color:{argb:'FFFFFFFF'}};
+    cell.alignment = {vertical:'middle', horizontal: k===1 ? 'left' : 'right'};
+  });
+  resumen.forEach(function(rw){
+    const r = wr.addRow(rw); r.font = {name:FONT, size:10};
+    [3,4,5,6,8].forEach(function(k){ r.getCell(k).numFmt = '#,##0'; });
+    r.getCell(7).numFmt = '0%';
+    if(rw[5]>0) r.getCell(6).font = {name:FONT, size:10, color:{argb:RED}};
+  });
+  const rt = wr.addRow(['TOTAL', nDocs, tM, tC, tS, tV, tS>0 ? tV/tS : 0, resumen.reduce(function(a,x){ return a+x[7]; },0)]);
+  rt.font = {name:FONT, size:10, bold:true};
+  [3,4,5,6,8].forEach(function(k){ rt.getCell(k).numFmt = '#,##0'; });
+  rt.getCell(7).numFmt = '0%';
+  rt.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
+  wr.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9};
+  return {wbx: wb, count: filtered.length, items: items, supName: supName, est: est};
+}
+async function cobDownloadXlsx(o){
+  if(o.wbx){
+    const buf = await o.wbx.xlsx.writeBuffer();
+    const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = o.name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }else{
+    XLSX.writeFile(o.wb, o.name);
+  }
+}
+function cobBuildWorkbook(items, supName, est){
+  if(typeof ExcelJS!=='undefined'){
+    try{ return cobBuildStyled(items, supName, est); }catch(e){ console.error('excel con formato', e); }
+  }
+  return cobBuildWorkbookPlain(items, supName, est);
+}
 function cobSafeName(x){ return String(x||'Todos').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
 function runCobExport(){
   const supSel = document.getElementById('cobexp-sup').value;
@@ -5640,11 +5759,11 @@ function runCobExport(){
   const out = [];
   jobs.forEach(function(j){
     const r = cobBuildWorkbook(j.items, j.sup, est);
-    if(r.count>0) out.push({name: 'Cobranzas_'+cobSafeName(j.sup||'Todos')+'_'+hoy+'.xlsx', wb: r.wb, n: r.count});
+    if(r.count>0) out.push({name: 'Cobranzas_'+cobSafeName(j.sup||'Todos')+'_'+hoy+'.xlsx', wb: r.wb, wbx: r.wbx, n: r.count});
   });
   if(!out.length){ appAlert('No hay facturas para descargar con esa selección.'); return; }
   closeCobExport();
-  out.forEach(function(o,i){ setTimeout(function(){ XLSX.writeFile(o.wb, o.name); }, i*500); });
+  out.forEach(function(o,i){ setTimeout(function(){ cobDownloadXlsx(o); }, i*500); });
   appAlert((out.length>1?'Se descargaron '+out.length+' archivos':'Se descargó 1 archivo')+' de Excel:\n\n- '+out.map(function(o){ return o.name+' ('+o.n+' facturas)'; }).join('\n- ')+(out.length>1?'\n\nSi el navegador te pide permiso para descargar varios archivos, aceptalo.':''));
 }
 function cobSupOfName(name){ return cobConfig.asg[normKey(name||'Sin vendedor')] || 'Sin supervisor'; }

@@ -5570,39 +5570,39 @@ function cobFilterItems(items, est){
     return true;
   }).sort(function(a,b){ return (a.cliente||'').localeCompare(b.cliente||'') || (a.vencimiento||'').localeCompare(b.vencimiento||''); });
 }
-/* Una hoja con las cobranzas de un supervisor. Devuelve los totales por vendedor para el resumen general. */
+/* Una hoja con las cobranzas de un supervisor, con fórmulas: saldo = monto - cobrado, subtotal por vendedor y total.
+   Se usa SUBTOTAL para que al borrar filas o vendedores los totales se corrijan solos. */
 function cobAddSupSheet(wb, supName, filtered){
-  const ym = todayISOStr().slice(0,7);
   const byV = {};
   filtered.forEach(function(c){ const v = c.vendedor||'Sin vendedor'; (byV[v] = byV[v]||[]).push(c); });
   const vendNames = Object.keys(byV).sort(function(a,b){ return a.localeCompare(b); });
-  let nombre = String(supName||'Cobranzas').replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,31) || 'Cobranzas';
+  const nombre = String(supName||'Cobranzas').replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,31) || 'Cobranzas';
   const ws = wb.addWorksheet(nombre, {views:[{state:'frozen', ySplit:1}]});
   ws.columns = [
     {header:'Cliente', width:46}, {header:'Documento', width:20}, {header:'Fecha', width:12}, {header:'Vencimiento', width:13},
-    {header:'Días', width:8}, {header:'Monto', width:17}, {header:'Cobrado', width:17}, {header:'Saldo', width:17}, {header:'$', width:6}, {header:'Observación', width:34}
+    {header:'Días', width:8}, {header:'Monto', width:17}, {header:'Cobrado', width:17}, {header:'Saldo', width:17}, {header:'$', width:6}, {header:'Observación', width:34}, {header:'Vendedor', width:30}
   ];
   cobHdrCells(ws.getRow(1), 5, 8);
   const NUM = '#,##0.00', DT = 'dd/mm/yyyy';
-  const out = []; let tM=0, tC=0, tS=0;
+  const info = {name: ws.name, vend: []};
+  let tM=0, tC=0, tS=0;
   vendNames.forEach(function(v){
     const list = byV[v];
-    let sm=0, sc=0, sd=0, vc=0, mes=0;
-    list.forEach(function(c){
-      const s = cobSaldo(c); sm += c.monto||0; sc += c.cobrado||0; sd += s;
-      if(s>0 && daysUntil(c.vencimiento)<0) vc += s;
-      mes += cobCobradoEnMes(c, ym);
-    });
-    const g = ws.addRow([v, supName||'', '', '', '', '', '', sd, '', '']);
+    let sm=0, sc=0, sd=0, vc=0;
+    list.forEach(function(c){ const s = cobSaldo(c); sm += c.monto||0; sc += c.cobrado||0; sd += s; if(s>0 && daysUntil(c.vencimiento)<0) vc += s; });
+    const g = ws.addRow([v, supName||'', '', '', '', '', '', '', '', '', '']);
     g.font = {name:COB_FONT, size:10, bold:true};
     g.getCell(2).font = {name:COB_FONT, size:10, bold:false};
+    const first = g.number + 1, last = g.number + list.length;
+    g.getCell(8).value = {formula:'SUBTOTAL(9,H'+first+':H'+last+')', result: sd};
     g.getCell(8).font = {name:COB_FONT, size:10, bold:true, color:{argb:COB_RED}};
     g.getCell(8).numFmt = NUM; g.getCell(8).alignment = {horizontal:'right'};
     list.forEach(function(c){
       const s = cobSaldo(c), d = daysUntil(c.vencimiento);
       const ult = (c.cobros||[]).reduce(function(a,x){ return (x.f||'')>a ? x.f : a; }, '');
       const obs = [c.nota||'', ult ? 'Último cobro: '+formatDate(ult) : ''].filter(Boolean).join(' · ');
-      const r = ws.addRow([c.cliente||'', c.documento||'', cobXDate(c.emision), cobXDate(c.vencimiento), (s>0 && d<0) ? -d : 0, c.monto||0, c.cobrado||0, s, 'Gs.', obs]);
+      const r = ws.addRow([c.cliente||'', c.documento||'', cobXDate(c.emision), cobXDate(c.vencimiento), (s>0 && d<0) ? -d : 0, c.monto||0, c.cobrado||0, null, 'Gs.', obs, v]);
+      r.getCell(8).value = {formula:'F'+r.number+'-G'+r.number, result: s};
       r.font = {name:COB_FONT, size:10};
       r.getCell(3).numFmt = DT; r.getCell(4).numFmt = DT;
       r.getCell(3).alignment = {horizontal:'left'}; r.getCell(4).alignment = {horizontal:'left'};
@@ -5611,61 +5611,83 @@ function cobAddSupSheet(wb, supName, filtered){
       if(s<=0){ r.eachCell(function(cell){ cell.font = {name:COB_FONT, size:10, color:{argb:'FF7F7F7F'}}; }); }
       else if(d<0){ r.getCell(5).font = {name:COB_FONT, size:10, color:{argb:COB_RED}, bold:true}; }
     });
-    out.push({v:v, n:list.length, m:sm, cb:sc, sd:sd, vc:vc, mes:mes});
+    info.vend.push({v:v, n:list.length, m:sm, cb:sc, sd:sd, vc:vc});
     tM+=sm; tC+=sc; tS+=sd;
   });
-  const tot = ws.addRow(['TOTAL '+(supName||''),'','','','',tM,tC,tS,'','']);
+  const tr = ws.rowCount + 1;
+  const tot = ws.addRow(['TOTAL '+(supName||''),'','','','','','','','','','']);
   tot.font = {name:COB_FONT, size:10, bold:true};
+  tot.getCell(6).value = {formula:'SUBTOTAL(9,F2:F'+(tr-1)+')', result: tM};
+  tot.getCell(7).value = {formula:'SUBTOTAL(9,G2:G'+(tr-1)+')', result: tC};
+  tot.getCell(8).value = {formula:'SUBTOTAL(9,H2:H'+(tr-1)+')', result: tS};
   [6,7,8].forEach(function(k){ tot.getCell(k).numFmt = NUM; });
   tot.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
-  ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:10}};
+  ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:11}};
   ws.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:'1:1', paperSize:9};
-  return out;
+  return info;
 }
-/* groups: [{sup, items}] -> un solo libro: una hoja por supervisor + "Resumen general" al final */
-function cobBuildWorkbook(groups, est, titulo){
+/* groups: [{sup, items}] -> un solo libro: una hoja por supervisor + "Resumen general" al final (todo con fórmulas) */
+function cobBuildWorkbook(groups, est){
   const wb = new ExcelJS.Workbook(); wb.creator = COMPANY_NAME; wb.created = new Date();
+  wb.calcProperties = {fullCalcOnLoad: true};
   const hoy = todayISOStr();
   const sheets = []; let count = 0;
   groups.forEach(function(g){
     const f = cobFilterItems(g.items, est);
     if(!f.length) return;
     count += f.length;
-    sheets.push({sup: g.sup, vend: cobAddSupSheet(wb, g.sup, f)});
+    const info = cobAddSupSheet(wb, g.sup, f); info.sup = g.sup;
+    sheets.push(info);
   });
   if(!count) return {count:0};
   const wr = wb.addWorksheet('Resumen general');
-  wr.columns = [{width:42},{width:11},{width:18},{width:18},{width:18},{width:18},{width:11},{width:18}];
+  wr.columns = [{width:42},{width:11},{width:18},{width:18},{width:18},{width:18},{width:11}];
   const hasta = cobConfig.repHasta ? ' · Reporte del sistema cargado hasta el '+formatDate(cobConfig.repHasta) : '';
   wr.addRow([COMPANY_NAME+' · Resumen general de cobranzas']).font = {name:COB_FONT, size:14, bold:true};
   wr.addRow(['Emitido el '+formatDate(hoy)+hasta]).font = {name:COB_FONT, size:10, color:{argb:'FF595959'}};
-  wr.addRow(['Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')]).font = {name:COB_FONT, size:10, color:{argb:'FF595959'}};
+  wr.addRow(['Incluye: '+(est==='pend'?'facturas pendientes':est==='venc'?'facturas vencidas':'todas las facturas')+' · Los totales se calculan solos desde las hojas de cada supervisor.']).font = {name:COB_FONT, size:10, color:{argb:'FF595959'}};
   wr.addRow([]);
-  cobHdrCells(wr.addRow(['Supervisor / Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido','Cobrado en el mes']), 2, 8);
-  const money0 = '#,##0';
-  const G = {n:0,m:0,cb:0,sd:0,vc:0,mes:0};
+  cobHdrCells(wr.addRow(['Supervisor / Vendedor','Facturas','Monto original','Cobrado','Saldo pendiente','Saldo vencido','% vencido']), 2, 7);
+  const M0 = '#,##0';
+  const q = function(n){ return "'"+String(n).replace(/'/g,"''")+"'"; };
+  const pct = function(r){ return {formula:'IF(E'+r+'=0,0,F'+r+'/E'+r+')'}; };
+  const G = {n:0,m:0,cb:0,sd:0,vc:0};
+  const firstRow = wr.rowCount + 1;
   sheets.forEach(function(sh){
-    const S = {n:0,m:0,cb:0,sd:0,vc:0,mes:0};
+    const S = {n:0,m:0,cb:0,sd:0,vc:0};
     sh.vend.forEach(function(x){ Object.keys(S).forEach(function(k){ S[k]+=x[k]; }); });
-    const sr = wr.addRow([sh.sup||'Todos', S.n, S.m, S.cb, S.sd, S.vc, S.sd>0 ? S.vc/S.sd : 0, S.mes]);
+    const sr = wr.addRow([sh.sup||'Todos','','','','','','']);
+    const sn = sr.number, f1 = sn+1, f2 = sn+sh.vend.length;
     sr.font = {name:COB_FONT, size:10, bold:true};
+    const sums = [['B','n'],['C','m'],['D','cb'],['E','sd'],['F','vc']];
+    sums.forEach(function(c,i){ sr.getCell(i+2).value = {formula:'SUBTOTAL(9,'+c[0]+f1+':'+c[0]+f2+')', result:S[c[1]]}; });
+    sr.getCell(7).value = {formula:'IF(E'+sn+'=0,0,F'+sn+'/E'+sn+')', result: S.sd>0 ? S.vc/S.sd : 0};
     sr.eachCell({includeEmpty:true}, function(cell){ cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFDDEBF7'}}; });
-    [3,4,5,6,8].forEach(function(k){ sr.getCell(k).numFmt = money0; });
-    sr.getCell(7).numFmt = '0%';
     sh.vend.forEach(function(x){
-      const r = wr.addRow(['    '+x.v, x.n, x.m, x.cb, x.sd, x.vc, x.sd>0 ? x.vc/x.sd : 0, x.mes]);
+      const r = wr.addRow(['    '+x.v,'','','','','','']);
+      const n = r.number, sh1 = q(sh.name), K = sh1+'!$K:$K', nm = 'TRIM($A'+n+')';
+      r.getCell(2).value = {formula:'COUNTIFS('+K+','+nm+')', result:x.n};
+      r.getCell(3).value = {formula:'SUMIFS('+sh1+'!$F:$F,'+K+','+nm+')', result:x.m};
+      r.getCell(4).value = {formula:'SUMIFS('+sh1+'!$G:$G,'+K+','+nm+')', result:x.cb};
+      r.getCell(5).value = {formula:'SUMIFS('+sh1+'!$H:$H,'+K+','+nm+')', result:x.sd};
+      r.getCell(6).value = {formula:'SUMIFS('+sh1+'!$H:$H,'+K+','+nm+','+sh1+'!$E:$E,">0")', result:x.vc};
+      r.getCell(7).value = {formula:'IF(E'+n+'=0,0,F'+n+'/E'+n+')', result: x.sd>0 ? x.vc/x.sd : 0};
       r.font = {name:COB_FONT, size:10};
-      [3,4,5,6,8].forEach(function(k){ r.getCell(k).numFmt = money0; });
-      r.getCell(7).numFmt = '0%';
       if(x.vc>0) r.getCell(6).font = {name:COB_FONT, size:10, color:{argb:COB_RED}};
     });
     Object.keys(G).forEach(function(k){ G[k]+=S[k]; });
   });
-  const rt = wr.addRow(['TOTAL GENERAL', G.n, G.m, G.cb, G.sd, G.vc, G.sd>0 ? G.vc/G.sd : 0, G.mes]);
+  const tn = wr.rowCount + 1;
+  const rt = wr.addRow(['TOTAL GENERAL','','','','','','']);
   rt.font = {name:COB_FONT, size:11, bold:true};
-  [3,4,5,6,8].forEach(function(k){ rt.getCell(k).numFmt = money0; });
-  rt.getCell(7).numFmt = '0%';
+  [['B','n'],['C','m'],['D','cb'],['E','sd'],['F','vc']].forEach(function(c,i){ rt.getCell(i+2).value = {formula:'SUBTOTAL(9,'+c[0]+firstRow+':'+c[0]+(tn-1)+')', result:G[c[1]]}; });
+  rt.getCell(7).value = {formula:'IF(E'+tn+'=0,0,F'+tn+'/E'+tn+')', result: G.sd>0 ? G.vc/G.sd : 0};
   rt.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
+  for(let r=firstRow; r<=tn; r++){
+    [3,4,5,6].forEach(function(k){ wr.getRow(r).getCell(k).numFmt = M0; });
+    wr.getRow(r).getCell(2).numFmt = M0;
+    wr.getRow(r).getCell(7).numFmt = '0%';
+  }
   wr.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9};
   return {wbx: wb, count: count, hojas: sheets.length};
 }

@@ -321,6 +321,9 @@
       <button class="tab-btn" data-tab="cobranzas" onclick="switchTab('cobranzas')">Cobranzas</button>
       <button class="tab-btn" data-tab="cobest" onclick="switchTab('cobest')">Estimación de ingresos</button>
       <button class="tab-btn" data-tab="cobsup" onclick="switchTab('cobsup')">Supervisores</button>
+      <button class="tab-btn" data-tab="invefec" onclick="switchTab('invefec')">Efectividad</button>
+      <button class="tab-btn" data-tab="invhist" onclick="switchTab('invhist')">Historial</button>
+      <button class="tab-btn" data-tab="invcfg" onclick="switchTab('invcfg')">Reglas de pago</button>
       <button class="tab-btn" data-tab="ventas" onclick="switchTab('ventas')">Ventas</button>
       <button class="tab-btn" data-tab="resumen" onclick="switchTab('resumen')">Resumen del día</button>
     </div>
@@ -537,6 +540,46 @@
       <div class="section-title">Clientes internos (sus facturas no se cargan)</div>
       <p class="modal-sub" style="margin-top:-4px;">Facturas de vendedores o empleados que el sistema incluye en el reporte. Se ignoran en cada importación. Con el botón 🚫 de la tabla de cobranzas agregás más.</p>
       <div class="ledger"><table class="ltable" id="cs-clientes"></table></div>
+    </div>
+
+    <div class="panel" id="panel-invefec">
+      <div class="toolbar">
+        <h2>Efectividad de inventarios</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="btn-ghost btn-small" onclick="invShift(-1)" title="Mes anterior">◀</button>
+          <select id="inv-periodo" onchange="invSetPeriod(this.value)" style="background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:6px 10px;border-radius:5px;font-size:12.5px;"></select>
+          <button class="btn-ghost btn-small" onclick="invShift(1)" title="Mes siguiente">▶</button>
+          <button class="btn-primary btn-small" onclick="triggerInvImport()">📥 Cargar planilla de inventario</button>
+          <input type="file" id="inv-import-input" accept=".xlsx,.xls" multiple style="display:none;" onchange="handleInvFiles(event)">
+          <button class="btn-ghost btn-small" onclick="openInvModal()">+ A mano</button>
+          <button class="btn-primary btn-small" onclick="exportInvExcel()">📤 Descargar Excel</button>
+        </div>
+      </div>
+      <p class="modal-sub" style="margin-top:-4px;">Efectividad = productos contados sin diferencia ÷ productos contados. Podés cargar varias planillas juntas (una por marca).</p>
+      <div class="stat-grid" id="inv-summary"></div>
+      <div class="ledger"><table class="ltable" id="inv-table"></table></div>
+      <div id="inv-faltan" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="panel" id="panel-invhist">
+      <div class="toolbar"><h2>Historial de efectividad</h2></div>
+      <p class="modal-sub" style="margin-top:-4px;">Hacé clic en un mes para ver su detalle.</p>
+      <div class="ledger" style="margin-bottom:22px;"><table class="ltable" id="inv-hist"></table></div>
+      <div class="section-title">Efectividad por marca</div>
+      <div class="ledger"><table class="ltable" id="inv-matriz"></table></div>
+    </div>
+
+    <div class="panel" id="panel-invcfg">
+      <div class="toolbar"><h2>Reglas de pago del inventario</h2></div>
+      <p class="modal-sub" style="margin-top:-4px;">El pago corresponde si el promedio de efectividad de todas las marcas llega a la meta y el resultado final es positivo.</p>
+      <div class="field-grid" style="max-width:640px;">
+        <div class="field"><label>Meta de efectividad (%)</label><input type="number" id="invcfg-meta" min="1" max="100" step="0.5"></div>
+        <div class="field"><label>Resultado positivo (Dif. Gs.) debe cumplirse en</label>
+          <select id="invcfg-pos"><option value="total">Promedio de todas las marcas (como la planilla)</option><option value="cada">Además, ninguna marca en negativo</option></select></div>
+        <div class="field full"><label style="text-transform:none;letter-spacing:0;font-size:13px;display:flex;gap:8px;align-items:center;"><input type="checkbox" id="invcfg-cero"> No contar como producto los que tienen existencia 0 y conteo 0</label></div>
+        <div class="field full"><label>Marcas / familias (separadas por coma)</label><input type="text" id="invcfg-marcas"></div>
+      </div>
+      <button class="btn-primary" onclick="invSaveCfg()">Guardar reglas</button>
     </div>
 
     <div class="panel" id="panel-ventas">
@@ -864,9 +907,9 @@
   <div class="modal">
     <h3>Descargar reporte de cobranzas</h3>
     <p class="modal-sub">Genera un solo Excel con el estado actual de la app (cobros registrados, saldos y vencimientos al día de hoy), listo para enviar por correo.</p>
-    <div class="form-row"><label>Supervisor</label>
+    <div class="field"><label>Supervisor</label>
       <select id="cobexp-sup"></select></div>
-    <div class="form-row"><label>Qué facturas incluir</label>
+    <div class="field"><label>Qué facturas incluir</label>
       <select id="cobexp-est">
         <option value="pend">Solo pendientes (con saldo)</option>
         <option value="venc">Solo vencidas</option>
@@ -876,6 +919,40 @@
       <button type="button" class="btn-ghost" onclick="closeCobExport()">Cancelar</button>
       <button type="button" class="btn-primary" onclick="runCobExport()">Descargar Excel</button>
     </div>
+  </div>
+</div>
+
+<datalist id="inv-marcas-list"></datalist>
+<div class="overlay" id="inv-overlay">
+  <div class="modal">
+    <h3 id="inv-title">Cargar inventario</h3>
+    <p class="modal-sub" id="inv-file-info"></p>
+    <div class="field-grid">
+      <div class="field full"><label>Familia / marca</label><input type="text" id="inv-familia" list="inv-marcas-list" placeholder="Ej: Nestlé" oninput="invUpdatePreview()"></div>
+      <div class="field"><label>Fecha del relevamiento</label><input type="date" id="inv-fecha" onchange="if(this.value){document.getElementById('inv-per').value=this.value.slice(0,7);} invUpdatePreview()"></div>
+      <div class="field"><label>Período (mes al que corresponde)</label><input type="month" id="inv-per" onchange="invUpdatePreview()"></div>
+      <div class="field full" id="inv-sheet-row"><label>Hoja del archivo</label><select id="inv-sheet" onchange="invRecalc()"></select></div>
+    </div>
+    <div id="inv-filebox" style="margin-bottom:10px;"><label style="font-size:13px;display:flex;gap:8px;align-items:center;"><input type="checkbox" id="inv-cero" onchange="invRecalc()"> No contar productos con existencia 0 y conteo 0</label></div>
+    <div class="stat-grid" id="inv-preview" style="margin-bottom:14px;"></div>
+    <div class="field-grid cols-3">
+      <div class="field"><label>Productos contados</label><input type="number" id="inv-contados" min="0" oninput="invUpdatePreview()"></div>
+      <div class="field"><label>Sin diferencia</label><input type="number" id="inv-sindif" min="0" oninput="invUpdatePreview()"></div>
+      <div class="field"><label>Dif. Gs.</label><input type="number" id="inv-difgs" step="1" oninput="invUpdatePreview()"></div>
+    </div>
+    <p class="modal-sub" id="inv-warn" style="display:none;color:#c1432a;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeInvModal()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="saveInv()">Guardar</button>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="invdet-overlay">
+  <div class="modal" style="max-width:900px;">
+    <h3 id="invdet-title">Productos con diferencia</h3>
+    <p class="modal-sub" id="invdet-sub"></p>
+    <div class="ledger scroll-y" style="max-height:55vh;"><table class="ltable" id="invdet-table"></table></div>
+    <div class="modal-actions"><button type="button" class="btn-primary" onclick="closeInvDet()">Cerrar</button></div>
   </div>
 </div>
 
@@ -1053,6 +1130,8 @@ const BACKUP_DATE_KEY = 'dyf-lastbackup-v1';
 const COBRANZAS_KEY = 'dyf-cobranzas-v1';
 const COBPARAMS_KEY = 'dyf-cobparams-v1';
 const COBCONFIG_KEY = 'dyf-cobconfig-v1';
+const INV_KEY = 'dyf-inventario-v1';
+const INVCFG_KEY = 'dyf-invconfig-v1';
 const COMPANY_NAME = 'DYF Group';
 const SYNC_CONFIG_KEY = 'dyf-sync-config-v1';
 let supabaseClient = null;
@@ -1065,6 +1144,9 @@ let pagos = [];
 let cobranzas = [];
 const DEFAULT_SUPS = ['Alfredo Gonzalez','Cristian Acevedo','Daisy Irala'];
 let cobConfig = {sups:DEFAULT_SUPS.slice(), asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
+let inventarios = [];
+const INV_MARCAS_DEF = ['Nestlé','Roger','Módiga','MG','Vertex','D&F','Alamo'];
+let invConfig = {meta:80, positivo:'total', ignorarCero:false, marcas:INV_MARCAS_DEF.slice()};
 function normalizeCobConfig(o){
   const c = {sups:[], asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
   if(o){ if(o.link===false) c.link = false; if(typeof o.repHasta==='string') c.repHasta = o.repHasta; }
@@ -1158,6 +1240,8 @@ function loadLoans(){
     const rawCfg = localStorage.getItem(COBCONFIG_KEY);
     cobConfig = normalizeCobConfig(rawCfg ? JSON.parse(rawCfg) : null);
   }catch(e){ cobConfig = normalizeCobConfig(null); }
+  try{ const rawInv = localStorage.getItem(INV_KEY); inventarios = rawInv ? JSON.parse(rawInv) : []; if(!Array.isArray(inventarios)) inventarios = []; }catch(e){ inventarios = []; }
+  try{ const rawIc = localStorage.getItem(INVCFG_KEY); invConfig = normalizeInvConfig(rawIc ? JSON.parse(rawIc) : null); }catch(e){ invConfig = normalizeInvConfig(null); }
   if(repairDuplicateCuotaIds()) persist();
   if(repairDuplicatePagoIds()) persistPagos();
   document.getElementById('loading').style.display = 'none';
@@ -1223,6 +1307,8 @@ async function initSyncFromSavedConfig(){
       pagos = remote.pagos || [];
       if(Array.isArray(remote.cobranzas)) cobranzas = remote.cobranzas;
       if(remote.cobConfig && typeof remote.cobConfig==='object'){ cobConfig = normalizeCobConfig(remote.cobConfig); try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }catch(e){} }
+      if(Array.isArray(remote.inventarios)){ inventarios = remote.inventarios; try{ localStorage.setItem(INV_KEY, JSON.stringify(inventarios)); }catch(e){} }
+      if(remote.invConfig && typeof remote.invConfig==='object'){ invConfig = normalizeInvConfig(remote.invConfig); try{ localStorage.setItem(INVCFG_KEY, JSON.stringify(invConfig)); }catch(e){} }
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
       try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
       try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }catch(e){}
@@ -1253,7 +1339,7 @@ function pushToSupabase(){
   clearTimeout(pushDebounceTimer);
   pushDebounceTimer = setTimeout(async function(){
     try{
-      const payload = { loans: loans, incomes: incomes, pagos: pagos, cobranzas: cobranzas, cobConfig: cobConfig };
+      const payload = { loans: loans, incomes: incomes, pagos: pagos, cobranzas: cobranzas, cobConfig: cobConfig, inventarios: inventarios, invConfig: invConfig };
       const res = await supabaseClient.from('app_state').upsert({ id: supabaseConfig.workspace, data: payload, updated_at: new Date().toISOString() });
       if(res.error) throw res.error;
     }catch(e){
@@ -1272,6 +1358,8 @@ function subscribeRealtime(){
         pagos = payload.new.data.pagos || [];
         if(Array.isArray(payload.new.data.cobranzas)) cobranzas = payload.new.data.cobranzas;
         if(payload.new.data.cobConfig && typeof payload.new.data.cobConfig==='object'){ cobConfig = normalizeCobConfig(payload.new.data.cobConfig); try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }catch(e){} }
+        if(Array.isArray(payload.new.data.inventarios)){ inventarios = payload.new.data.inventarios; try{ localStorage.setItem(INV_KEY, JSON.stringify(inventarios)); }catch(e){} }
+        if(payload.new.data.invConfig && typeof payload.new.data.invConfig==='object'){ invConfig = normalizeInvConfig(payload.new.data.invConfig); try{ localStorage.setItem(INVCFG_KEY, JSON.stringify(invConfig)); }catch(e){} }
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
         try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
         try{ localStorage.setItem(PAGOS_KEY, JSON.stringify(pagos)); }catch(e){}
@@ -1366,7 +1454,7 @@ function persist(){
   pushToSupabase();
 }
 function exportBackup(){
-  const payload = {loans:loans, incomes:incomes, pagos:pagos, cobranzas:cobranzas, cobConfig:cobConfig};
+  const payload = {loans:loans, incomes:incomes, pagos:pagos, cobranzas:cobranzas, cobConfig:cobConfig, inventarios:inventarios, invConfig:invConfig};
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1389,7 +1477,7 @@ function importBackup(e){
   reader.onload = function(ev){
     try{
       const data = JSON.parse(ev.target.result);
-      let newLoans, newIncomes, newPagos, newCobranzas = null, newCobConfig = null;
+      let newLoans, newIncomes, newPagos, newCobranzas = null, newCobConfig = null, newInv = null, newInvCfg = null;
       if(Array.isArray(data)){
         // formato viejo: solo el array de préstamos
         newLoans = data; newIncomes = {}; newPagos = [];
@@ -1397,6 +1485,8 @@ function importBackup(e){
         newLoans = data.loans; newIncomes = data.incomes||{}; newPagos = data.pagos||[];
         if(Array.isArray(data.cobranzas)) newCobranzas = data.cobranzas;
         if(data.cobConfig && typeof data.cobConfig==='object') newCobConfig = data.cobConfig;
+        if(Array.isArray(data.inventarios)) newInv = data.inventarios;
+        if(data.invConfig && typeof data.invConfig==='object') newInvCfg = data.invConfig;
       }else{
         throw new Error('Formato inválido');
       }
@@ -1404,7 +1494,9 @@ function importBackup(e){
         loans = newLoans; incomes = newIncomes; pagos = newPagos;
         if(newCobranzas) cobranzas = newCobranzas;
         if(newCobConfig) cobConfig = normalizeCobConfig(newCobConfig);
-        persist(); persistIncomes(); persistPagos(); persistCobranzas(); persistCobConfig();
+        if(newInv) inventarios = newInv;
+        if(newInvCfg) invConfig = normalizeInvConfig(newInvCfg);
+        persist(); persistInv(); persistInvConfig(); persistIncomes(); persistPagos(); persistCobranzas(); persistCobConfig();
         renderAll();
         appAlert('Copia de seguridad importada correctamente.');
       }
@@ -2339,6 +2431,9 @@ function renderActivePanel(){
   else if(activeTab==='cobranzas') renderCobranzasTab();
   else if(activeTab==='cobest') renderCobEstimacion();
   else if(activeTab==='cobsup') renderCobSupTab();
+  else if(activeTab==='invefec') renderInvEfecTab();
+  else if(activeTab==='invhist') renderInvHistTab();
+  else if(activeTab==='invcfg') renderInvCfgTab();
   else if(activeTab==='resumen') renderResumenTab();
 }
 
@@ -4469,6 +4564,7 @@ const SECTIONS = {
   flujo:     {icon:'💵', title:'Flujo de caja', desc:'Lo que hay que pagar cada día: cuotas de préstamos, cheques y otros pagos.', tabs:['flujo','pagos','priority']},
   finanzas:  {icon:'🏦', title:'Finanzas', desc:'Deuda general, cheques por marca y por empresa, en qué se gasta, préstamos y costo financiero.', tabs:['deudames','gastos','loans','bank','month','stats']},
   cobranzas: {icon:'🧾', title:'Cobranzas', desc:'Seguimiento de lo que deben los clientes por vendedor y estimación de lo que se va a recaudar.', tabs:['cobranzas','cobest','cobsup']},
+  inventario:{icon:'📦', title:'Inventario', desc:'Efectividad de los inventarios por marca y si se llega a la meta para el pago.', tabs:['invefec','invhist','invcfg']},
   ventas:    {icon:'📈', title:'Ventas', desc:'Sección preparada para definir juntos qué querés ver.', tabs:['ventas'], soon:true},
   resumen:   {icon:'📋', title:'Resumen del día', desc:'Lo más importante de hoy en una sola pantalla.', tabs:['resumen']}
 };
@@ -4526,6 +4622,7 @@ function renderHome(){
     flujo:     {txt:'Hoy a pagar: '+money(hoy)+(atrasados.length?' · '+atrasados.length+' cheque(s) atrasado(s)':''), alert: atrasados.length>0},
     finanzas:  {txt:'Saldo de préstamos: '+money(gs.saldoPendienteTotal)+(gs.vencidas?' · '+gs.vencidas+' cuota(s) vencida(s)':''), alert: gs.vencidas>0},
     cobranzas: {txt: cobranzas.length ? 'Vencido: '+money(cs.vencido)+' · Pendiente: '+money(cs.pendiente) : 'Todavía sin cobranzas cargadas', alert: cs.vencido>0},
+    inventario:(function(){ const ps = invPeriods(); if(!ps.length) return {txt:'Todavía sin inventarios cargados'}; const p = ps[ps.length-1], R = invResumen(p); return {txt: invPeriodLabel(p)+': '+invPct(R.avg)+' · '+(R.paga?'se paga':'no se paga'), alert: !R.paga}; })(),
     ventas:    {txt:'Próximamente'},
     resumen:   {txt:'Pagos, cheques y cobranzas de hoy'}
   };
@@ -5719,6 +5816,479 @@ function runCobExport(){
     appAlert('Se descargó '+name+' con '+r.count+' facturas.\n\n'+(r.hojas>1||!supSel ? 'Trae una hoja por supervisor ('+r.hojas+') y al final la hoja "Resumen general".' : 'Trae la hoja del supervisor y la hoja "Resumen general".'));
   });
 }
+
+/* =====================================================================
+   INVENTARIO: efectividad por marca
+   Efectividad = productos sin diferencia / productos contados. Se paga si el promedio de
+   las marcas llega a la meta (80 %) y el resultado final en Gs. es positivo.
+   ===================================================================== */
+let invView = {p:''};
+function normalizeInvConfig(o){
+  const c = {meta:80, positivo:'total', ignorarCero:false, marcas:INV_MARCAS_DEF.slice()};
+  if(o && typeof o==='object'){
+    if(typeof o.meta==='number' && o.meta>0 && o.meta<=100) c.meta = o.meta;
+    if(o.positivo==='total' || o.positivo==='cada') c.positivo = o.positivo;
+    c.ignorarCero = !!o.ignorarCero;
+    if(Array.isArray(o.marcas) && o.marcas.length) c.marcas = o.marcas.filter(function(x){ return typeof x==='string' && x.trim(); });
+  }
+  return c;
+}
+function persistInv(){
+  try{ localStorage.setItem(INV_KEY, JSON.stringify(inventarios)); }
+  catch(e){ console.error('No se pudo guardar inventarios', e); appAlert('No se pudo guardar en este navegador. Usá "Exportar copia de seguridad" para no perder los datos.'); }
+  pushToSupabase();
+}
+function persistInvConfig(){
+  try{ localStorage.setItem(INVCFG_KEY, JSON.stringify(invConfig)); }catch(e){ console.error(e); }
+  pushToSupabase();
+}
+function invPeriodLabel(p){
+  if(!/^\d{4}-\d{2}$/.test(p||'')) return p||'';
+  return MESES_ES[parseInt(p.slice(5),10)-1]+' '+p.slice(0,4);
+}
+function invEf(e){ return e.contados>0 ? e.sinDif/e.contados : 0; }
+function invPeriods(){
+  const set = {}; inventarios.forEach(function(e){ set[e.periodo] = 1; });
+  return Object.keys(set).sort();
+}
+function invEntries(p){
+  return inventarios.filter(function(e){ return e.periodo===p; }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||'') || a.familia.localeCompare(b.familia); });
+}
+function invResumen(p){
+  const list = invEntries(p), n = list.length;
+  const r = {n:n, contados:0, sinDif:0, avg:0, total:0, prom:0, neg:[], okEf:false, okPos:false, paga:false, motivo:''};
+  if(!n){ r.motivo = 'Sin inventarios cargados'; return r; }
+  let sumEf = 0;
+  list.forEach(function(e){ sumEf += invEf(e); r.total += e.difGs||0; r.contados += e.contados; r.sinDif += e.sinDif; if((e.difGs||0)<0) r.neg.push(e.familia); });
+  r.avg = sumEf/n; r.prom = r.total/n;
+  r.okEf = r.avg*100 >= invConfig.meta - 1e-9;
+  r.okPos = invConfig.positivo==='cada' ? (r.neg.length===0 && r.prom>=0) : r.prom>=0;
+  r.paga = r.okEf && r.okPos;
+  const m = [];
+  if(!r.okEf) m.push('el promedio de efectividad ('+(r.avg*100).toFixed(1)+' %) no llega al '+invConfig.meta+' %');
+  if(!r.okPos) m.push(invConfig.positivo==='cada' && r.prom>=0 ? 'hay marcas con resultado negativo ('+r.neg.join(', ')+')' : 'el promedio de Dif. Gs. es negativo');
+  r.motivo = r.paga ? 'Cumple la meta de efectividad y el resultado es positivo' : m.join(' y ');
+  return r;
+}
+function invDefaultPeriod(){
+  const ps = invPeriods();
+  if(invView.p && (ps.indexOf(invView.p)!==-1 || invView.p===todayISOStr().slice(0,7))) return invView.p;
+  return ps.length ? ps[ps.length-1] : todayISOStr().slice(0,7);
+}
+function invSetPeriod(p){ invView.p = p; renderInvEfecTab(); }
+function invShift(d){
+  const ps = invPeriods(); const cur = invDefaultPeriod();
+  if(!ps.length) return;
+  let all = ps.slice(); if(all.indexOf(cur)===-1){ all.push(cur); all.sort(); }
+  const i = all.indexOf(cur) + d;
+  if(i>=0 && i<all.length) invSetPeriod(all[i]);
+}
+function invPct(x){ return (x*100).toFixed(1).replace('.',',')+' %'; }
+function invMoneyCls(v){ return v<0 ? 'color:#c1432a;' : ''; }
+function refreshInvMarcas(){
+  const dl = document.getElementById('inv-marcas-list');
+  if(dl){
+    const set = {}; invConfig.marcas.forEach(function(m){ set[m]=1; }); inventarios.forEach(function(e){ set[e.familia]=1; });
+    dl.innerHTML = Object.keys(set).sort().map(function(m){ return '<option value="'+escapeHtml(m)+'"></option>'; }).join('');
+  }
+}
+function renderInvEfecTab(){
+  refreshInvMarcas();
+  const ps = invPeriods(), cur = invDefaultPeriod();
+  let all = ps.slice(); if(all.indexOf(cur)===-1){ all.push(cur); all.sort(); }
+  const sel = document.getElementById('inv-periodo');
+  sel.innerHTML = all.slice().reverse().map(function(p){ return '<option value="'+p+'"'+(p===cur?' selected':'')+'>'+escapeHtml(invPeriodLabel(p))+'</option>'; }).join('');
+  const R = invResumen(cur), list = invEntries(cur);
+  const sum = document.getElementById('inv-summary');
+  if(!R.n){
+    sum.innerHTML = '';
+    document.getElementById('inv-faltan').innerHTML = '';
+    document.getElementById('inv-table').innerHTML = '<tr><td class="empty" style="border:none;"><b>No hay inventarios cargados en '+escapeHtml(invPeriodLabel(cur))+'</b>Usá "Cargar planilla de inventario" y elegí el Excel de cada marca; la app calcula la efectividad sola.</td></tr>';
+    return;
+  }
+  const estado = R.paga ? '<span style="color:#1d7a4a;">SE PAGA</span>' : '<span style="color:#c1432a;">NO SE PAGA</span>';
+  sum.innerHTML =
+    '<div class="stat'+(R.okEf?'':' alert')+'"><div class="stat-label">Efectividad promedio</div><div class="stat-value">'+invPct(R.avg)+'</div><div class="stat-sub">Meta: '+invConfig.meta+' % · promedio de '+R.n+' marca(s)</div></div>' +
+    '<div class="stat'+(R.okPos?'':' alert')+'"><div class="stat-label">Dif. Gs. promedio por marca</div><div class="stat-value">'+money(R.prom)+'</div><div class="stat-sub">'+(R.okPos?'Positivo':'Negativo')+' · total del mes '+money(R.total)+'</div></div>' +
+    '<div class="stat'+(R.paga?'':' alert')+'"><div class="stat-label">Estado del pago</div><div class="stat-value">'+estado+'</div><div class="stat-sub">'+escapeHtml(R.motivo)+'</div></div>';
+  document.getElementById('inv-table').innerHTML =
+    '<tr><th>Fecha relev.</th><th>Familia</th><th class="mono">Productos contados</th><th class="mono">Sin diferencia</th><th class="mono">Con diferencia</th><th class="mono">Efectividad</th><th class="mono">Dif. Gs.</th><th style="text-align:right;">Acciones</th></tr>' +
+    list.map(function(e){
+      const ef = invEf(e), ok = ef*100 >= invConfig.meta - 1e-9;
+      return '<tr><td>'+(e.fecha?formatDate(e.fecha):'—')+'</td><td><b>'+escapeHtml(e.familia)+'</b>'+(e.archivo?'<div style="font-size:11px;color:var(--ink-400);">'+escapeHtml(e.archivo)+'</div>':'')+'</td>' +
+        '<td class="mono">'+e.contados+'</td><td class="mono">'+e.sinDif+'</td><td class="mono">'+(e.contados-e.sinDif)+'</td>' +
+        '<td class="mono" style="'+(ok?'color:#1d7a4a;':'color:#c1432a;')+'font-weight:600;">'+invPct(ef)+'</td>' +
+        '<td class="mono" style="'+invMoneyCls(e.difGs)+'">'+money(e.difGs)+'</td>' +
+        '<td style="text-align:right;white-space:nowrap;">'+((e.difs&&e.difs.length)?'<button class="icon-btn" title="Ver productos con diferencia" onclick="invShowDifs(\''+e.id+'\')">🔍</button> ':'')+'<button class="icon-btn" title="Editar" onclick="openInvModal(\''+e.id+'\')">✎</button> <button class="icon-btn danger" title="Eliminar" onclick="deleteInv(\''+e.id+'\')">✕</button></td></tr>';
+    }).join('') +
+    '<tr class="total-row"><td colspan="2">TOTAL DEL MES</td><td class="mono">'+R.contados+'</td><td class="mono">'+R.sinDif+'</td><td class="mono">'+(R.contados-R.sinDif)+'</td><td class="mono"></td><td class="mono">'+money(R.total)+'</td><td></td></tr>' +
+    '<tr class="total-row"><td colspan="2">RESULTADO (promedio de las '+R.n+' marcas)</td><td class="mono"></td><td class="mono"></td><td class="mono"></td><td class="mono" style="'+(R.okEf?'color:#1d7a4a;':'color:#c1432a;')+'">'+invPct(R.avg)+'</td><td class="mono" style="'+invMoneyCls(R.prom)+'">'+money(R.prom)+'</td><td></td></tr>';
+  // marcas habituales que todavía no tienen inventario en el mes
+  const cargadas = list.map(function(e){ return normKey(e.familia); });
+  const faltan = invConfig.marcas.filter(function(m){ return cargadas.indexOf(normKey(m))===-1; });
+  document.getElementById('inv-faltan').innerHTML = faltan.length
+    ? '<span style="color:var(--ink-400);font-size:12px;margin-right:6px;">Sin cargar este mes:</span>'+faltan.map(function(m){ return '<button class="pill" style="cursor:pointer;background:none;margin:2px 4px 2px 0;" title="Cargar a mano" onclick="invPrefill(\''+escapeHtml(m).replace(/\'/g,"\\'")+'\')">'+escapeHtml(m)+'</button>'; }).join('')
+    : '';
+}
+function invPrefill(m){ openInvModal(); document.getElementById('inv-familia').value = m; document.getElementById('inv-per').value = invDefaultPeriod(); document.getElementById('inv-fecha').value = (invDefaultPeriod()===todayISOStr().slice(0,7)) ? todayISOStr() : invDefaultPeriod()+'-01'; invUpdatePreview(); }
+function renderInvHistTab(){
+  const ps = invPeriods().slice().reverse();
+  const t = document.getElementById('inv-hist');
+  if(!ps.length){ t.innerHTML = '<tr><td class="empty" style="border:none;">Todavía no hay inventarios cargados.</td></tr>'; document.getElementById('inv-matriz').innerHTML=''; return; }
+  t.innerHTML = '<tr><th>Período</th><th class="mono">Marcas</th><th class="mono">Efectividad promedio</th><th class="mono">Dif. Gs. total</th><th>Pago</th></tr>' +
+    ps.map(function(p){
+      const R = invResumen(p);
+      return '<tr class="row-click" onclick="invOpenPeriod(\''+p+'\')"><td>'+escapeHtml(invPeriodLabel(p))+'</td><td class="mono">'+R.n+'</td><td class="mono" style="'+(R.okEf?'color:#1d7a4a;':'color:#c1432a;')+'font-weight:600;">'+invPct(R.avg)+'</td><td class="mono" style="'+invMoneyCls(R.total)+'">'+money(R.total)+'</td><td>'+(R.paga?'<span class="badge badge-ok">Se paga</span>':'<span class="badge badge-late" title="'+escapeHtml(R.motivo)+'">No se paga</span>')+'</td></tr>';
+    }).join('');
+  // matriz marca x período (últimos 8)
+  const last = ps.slice(0,8).reverse();
+  const fams = {}; inventarios.forEach(function(e){ fams[e.familia] = 1; });
+  const names = Object.keys(fams).sort();
+  const m = document.getElementById('inv-matriz');
+  m.innerHTML = '<tr><th>Familia</th>'+last.map(function(p){ return '<th class="mono">'+escapeHtml(invPeriodLabel(p))+'</th>'; }).join('')+'</tr>' +
+    names.map(function(n){
+      return '<tr><td>'+escapeHtml(n)+'</td>'+last.map(function(p){
+        const e = inventarios.find(function(x){ return x.periodo===p && normKey(x.familia)===normKey(n); });
+        if(!e) return '<td class="mono" style="color:var(--ink-400);">—</td>';
+        const ef = invEf(e), ok = ef*100 >= invConfig.meta - 1e-9;
+        return '<td class="mono" style="'+(ok?'color:#1d7a4a;':'color:#c1432a;')+'">'+invPct(ef)+'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+}
+function invOpenPeriod(p){ invView.p = p; switchTab('invefec'); }
+function renderInvCfgTab(){
+  document.getElementById('invcfg-meta').value = invConfig.meta;
+  document.getElementById('invcfg-pos').value = invConfig.positivo;
+  document.getElementById('invcfg-cero').checked = !!invConfig.ignorarCero;
+  document.getElementById('invcfg-marcas').value = invConfig.marcas.join(', ');
+}
+function invSaveCfg(){
+  const meta = parseFloat(String(document.getElementById('invcfg-meta').value).replace(',','.'));
+  invConfig.meta = (!isNaN(meta) && meta>0 && meta<=100) ? meta : 80;
+  invConfig.positivo = document.getElementById('invcfg-pos').value==='total' ? 'total' : 'cada';
+  invConfig.ignorarCero = document.getElementById('invcfg-cero').checked;
+  const ms = document.getElementById('invcfg-marcas').value.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  invConfig.marcas = ms.length ? ms : INV_MARCAS_DEF.slice();
+  persistInvConfig(); renderAll();
+}
+
+/* ---------- lectura de la planilla de inventario ---------- */
+function invNum(v){
+  if(typeof v==='number') return isFinite(v) ? v : null;
+  if(v==null || v==='') return null;
+  const n = parseAmt(v); return isNaN(n) ? null : n;
+}
+function invFindCols(rows){
+  for(let i=0;i<Math.min(rows.length,25);i++){
+    const r = rows[i]||[]; const cols = {};
+    r.forEach(function(v,j){
+      const h = normHdr(v); if(!h) return;
+      if(/^(producto|codigo|cod|sku|item|articulo)$/.test(h) && cols.code==null) cols.code = j;
+      else if(/descrip|^nombre/.test(h) && cols.desc==null) cols.desc = j;
+      else if(/barra/.test(h)) cols.bar = j;
+      else if(/^comp/.test(h)) cols.comp = j;
+      else if(/^bulto/.test(h)) cols.bulto = j;
+      else if(/^unidad/.test(h)) cols.unidad = j;
+      else if(/^(conteo|contado|fisico)/.test(h) && cols.conteo==null) cols.conteo = j;
+      else if(/existencia|sistema|stock/.test(h)) cols.exist = j;
+      else if(/^dif/.test(h)) cols.dif = j;
+      else if(/costo|precio/.test(h)) cols.costo = j;
+    });
+    if(cols.exist!=null && (cols.conteo!=null || cols.bulto!=null) && (cols.desc!=null || cols.code!=null)) return {row:i, cols:cols};
+  }
+  return null;
+}
+function invParseRows(rows, ignorarCero){
+  const f = invFindCols(rows);
+  if(!f) return null;
+  const c = f.cols, g = function(r,i){ return (i!=null && r[i]!=null) ? r[i] : null; };
+  const res = {contados:0, sinDif:0, difGs:0, difs:[], filas:0};
+  for(let i=f.row+1;i<rows.length;i++){
+    const r = rows[i]||[];
+    const desc = String(g(r,c.desc!=null?c.desc:c.code)||'').trim();
+    const code = String(g(r,c.code)||'').trim();
+    if(!desc) continue;
+    if(/^total/i.test(desc) || /^total/i.test(code)) continue;
+    const comp = invNum(g(r,c.comp)), bulto = invNum(g(r,c.bulto)), unid = invNum(g(r,c.unidad));
+    const ex = invNum(g(r,c.exist));
+    let conteo;
+    if(comp!=null || bulto!=null || unid!=null) conteo = (comp||0)*(bulto||0) + (unid||0);
+    else conteo = invNum(g(r,c.conteo));
+    if(c.desc==null && ex==null && conteo==null) continue;   // fila de título de sección
+    if(ex==null && conteo==null) continue;
+    conteo = conteo||0;
+    const exist = ex||0;
+    if(ignorarCero && conteo===0 && exist===0) continue;
+    const costo = invNum(g(r,c.costo))||0;
+    const dif = Math.round((conteo-exist)*1000)/1000;
+    const valor = dif*costo;
+    res.contados++; res.filas++;
+    if(dif===0){ res.sinDif++; }
+    else{
+      let obs = '';
+      for(let k=(c.costo!=null?c.costo:0)+1;k<r.length;k++){ if(typeof r[k]==='string' && r[k].trim() && !/^=/.test(r[k])){ obs = r[k].trim(); break; } }
+      res.difs.push({c:code, d:desc, e:exist, n:conteo, v:Math.round(valor*100)/100, o:obs});
+    }
+    res.difGs += valor;
+  }
+  if(!res.contados) return null;
+  res.difGs = Math.round(res.difGs*100)/100;
+  res.difs.sort(function(a,b){ return Math.abs(b.v)-Math.abs(a.v); });
+  return res;
+}
+let invQueue = [], invCur = null;
+function triggerInvImport(){ document.getElementById('inv-import-input').click(); }
+function handleInvFiles(e){
+  const files = Array.prototype.slice.call(e.target.files||[]);
+  e.target.value = '';
+  if(!files.length) return;
+  invQueue = [];
+  let pending = files.length;
+  files.forEach(function(file){
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        const wb = readWorkbookSmart(new Uint8Array(ev.target.result));
+        invQueue.push({name:file.name, wb:wb, mod:file.lastModified});
+      }catch(err){ console.error(err); invQueue.push({name:file.name, wb:null}); }
+      if(--pending===0){ invQueue.sort(function(a,b){ return a.name.localeCompare(b.name); }); invNext(); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function invNext(){
+  if(!invQueue.length){ document.getElementById('inv-overlay').classList.remove('open'); return; }
+  const it = invQueue.shift();
+  if(!it.wb){ appAlert('No se pudo leer "'+it.name+'". Verificá que sea un Excel válido.'); invNext(); return; }
+  const parsed = {};
+  it.wb.SheetNames.forEach(function(n){
+    const ws = it.wb.Sheets[n]; if(!ws) return;
+    try{
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+      parsed[n] = rows;
+    }catch(e){}
+  });
+  const okNames = Object.keys(parsed).filter(function(n){ return invFindCols(parsed[n]); });
+  if(!okNames.length){
+    appAlert('No encontré la tabla de inventario en "'+it.name+'". Tiene que tener columnas como Producto, Descripción, conteo, Existencia y Precio Costo.');
+    invNext(); return;
+  }
+  const g = invGuessFromName(it.name, it.mod);
+  invCur = {id:null, name:it.name, rows:parsed, sheets:okNames, res:null};
+  document.getElementById('inv-title').textContent = 'Cargar inventario';
+  document.getElementById('inv-file-info').textContent = 'Archivo: '+it.name+(invQueue.length?' · faltan '+invQueue.length+' más':'');
+  document.getElementById('inv-familia').value = g.familia;
+  document.getElementById('inv-fecha').value = g.fecha;
+  document.getElementById('inv-per').value = g.fecha.slice(0,7);
+  document.getElementById('inv-sheet').innerHTML = okNames.map(function(n){ return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>'; }).join('');
+  document.getElementById('inv-sheet-row').style.display = okNames.length>1 ? '' : 'none';
+  document.getElementById('inv-cero').checked = !!invConfig.ignorarCero;
+  document.getElementById('inv-filebox').style.display = '';
+  refreshInvMarcas();
+  invRecalc(true);
+  document.getElementById('inv-overlay').classList.add('open');
+}
+function invGuessFromName(name, mod){
+  const base = String(name||'').replace(/\.[a-z0-9]+$/i,'');
+  let fecha = '';
+  const m = base.match(/(\d{1,2})[-_.\/](\d{1,2})[-_.\/](\d{4})/);
+  if(m){ fecha = m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  else{
+    const m2 = base.match(/(\d{4})[-_.\/](\d{1,2})[-_.\/](\d{1,2})/);
+    if(m2) fecha = m2[1]+'-'+m2[2].padStart(2,'0')+'-'+m2[3].padStart(2,'0');
+  }
+  if(!fecha) fecha = todayISOStr();
+  const low = ' '+normKey(base).replace(/[^a-z0-9&]+/g,' ')+' ';
+  let fam = '';
+  const alias = [['dyf','D&F'],['d&f','D&F'],['d y f','D&F'],['nestle','Nestlé'],['casa modiga','Módiga'],['modiga','Módiga']];
+  alias.forEach(function(a){ if(!fam && low.indexOf(' '+a[0]+' ')!==-1) fam = a[1]; });
+  if(!fam) invConfig.marcas.forEach(function(mm){
+    const k = normKey(mm).replace(/[^a-z0-9&]+/g,' ').trim();
+    if(!fam && k && low.indexOf(' '+k+' ')!==-1) fam = mm;
+  });
+  return {familia: fam, fecha: fecha};
+}
+function invRecalc(fromFile){
+  if(!invCur || !invCur.rows) return;
+  const sheet = document.getElementById('inv-sheet').value || invCur.sheets[0];
+  const res = invParseRows(invCur.rows[sheet], document.getElementById('inv-cero').checked);
+  invCur.res = res;
+  if(res){
+    document.getElementById('inv-contados').value = res.contados;
+    document.getElementById('inv-sindif').value = res.sinDif;
+    document.getElementById('inv-difgs').value = Math.round(res.difGs);
+  }
+  invUpdatePreview();
+}
+function invUpdatePreview(){
+  const c = parseInt(document.getElementById('inv-contados').value,10)||0, s = parseInt(document.getElementById('inv-sindif').value,10)||0;
+  const ef = c>0 ? s/c : 0, dg = parseFloat(document.getElementById('inv-difgs').value)||0;
+  document.getElementById('inv-preview').innerHTML =
+    '<div class="stat'+(ef*100>=invConfig.meta-1e-9?'':' alert')+'"><div class="stat-label">Efectividad</div><div class="stat-value">'+invPct(ef)+'</div><div class="stat-sub">'+s+' de '+c+' sin diferencia</div></div>' +
+    '<div class="stat'+(dg<0?' alert':'')+'"><div class="stat-label">Dif. Gs.</div><div class="stat-value">'+money(dg)+'</div><div class="stat-sub">'+(dg<0?'Faltante':'Sobrante o sin diferencia')+'</div></div>';
+  const fam = document.getElementById('inv-familia').value.trim(), per = document.getElementById('inv-per').value;
+  const ex = fam && inventarios.find(function(e){ return e.periodo===per && normKey(e.familia)===normKey(fam) && e.id!==(invCur&&invCur.id); });
+  const w = document.getElementById('inv-warn');
+  w.textContent = ex ? 'Ya hay un inventario de '+ex.familia+' en '+invPeriodLabel(per)+': al guardar se reemplaza.' : '';
+  w.style.display = ex ? '' : 'none';
+}
+function openInvModal(id){
+  const manual = !id;
+  let e = null;
+  if(id){ e = inventarios.find(function(x){ return x.id===id; }); if(!e) return; }
+  invQueue = [];
+  invCur = {id:id||null, name:'', rows:null, sheets:[], res:null, entry:e};
+  document.getElementById('inv-title').textContent = id ? 'Editar inventario' : 'Cargar inventario a mano';
+  document.getElementById('inv-file-info').textContent = id ? 'Podés corregir los datos; el detalle de productos con diferencia se conserva.' : 'Ingresá los totales de la planilla.';
+  document.getElementById('inv-familia').value = e ? e.familia : '';
+  document.getElementById('inv-fecha').value = e ? (e.fecha||'') : todayISOStr();
+  document.getElementById('inv-per').value = e ? e.periodo : todayISOStr().slice(0,7);
+  document.getElementById('inv-contados').value = e ? e.contados : '';
+  document.getElementById('inv-sindif').value = e ? e.sinDif : '';
+  document.getElementById('inv-difgs').value = e ? Math.round(e.difGs) : '';
+  document.getElementById('inv-sheet-row').style.display = 'none';
+  document.getElementById('inv-filebox').style.display = 'none';
+  refreshInvMarcas(); invUpdatePreview();
+  document.getElementById('inv-overlay').classList.add('open');
+}
+function closeInvModal(){
+  const more = invQueue.length;
+  document.getElementById('inv-overlay').classList.remove('open');
+  invCur = null;
+  if(more) invNext();
+}
+function saveInv(){
+  const fam = document.getElementById('inv-familia').value.trim();
+  const fecha = document.getElementById('inv-fecha').value;
+  const per = document.getElementById('inv-per').value || (fecha||'').slice(0,7);
+  const c = parseInt(document.getElementById('inv-contados').value,10), s = parseInt(document.getElementById('inv-sindif').value,10);
+  const dg = parseFloat(document.getElementById('inv-difgs').value);
+  const faltan = [];
+  if(!fam) faltan.push('Familia / marca');
+  if(!per) faltan.push('Período');
+  if(isNaN(c) || c<=0) faltan.push('Productos contados');
+  if(isNaN(s) || s<0 || s>c) faltan.push('Productos sin diferencia (no puede ser mayor a los contados)');
+  if(isNaN(dg)) faltan.push('Dif. Gs.');
+  if(faltan.length){ appAlert('Revisá estos campos:\n\n- '+faltan.join('\n- ')); return; }
+  const prev = invCur && invCur.entry;
+  const e = {
+    id: (invCur && invCur.id) || uid('inv'),
+    periodo: per, fecha: fecha, familia: fam, contados: c, sinDif: s, difGs: dg,
+    archivo: prev ? prev.archivo : (invCur ? invCur.name : ''),
+    difs: prev ? (prev.difs||[]) : ((invCur && invCur.res && invCur.res.difs) ? invCur.res.difs : [])
+  };
+  // reemplaza el de la misma marca y período
+  inventarios = inventarios.filter(function(x){ return x.id!==e.id && !(x.periodo===e.periodo && normKey(x.familia)===normKey(e.familia)); });
+  inventarios.push(e);
+  if(invConfig.marcas.map(normKey).indexOf(normKey(fam))===-1){ invConfig.marcas.push(fam); persistInvConfig(); }
+  persistInv();
+  invView.p = per;
+  const more = invQueue.length;
+  document.getElementById('inv-overlay').classList.remove('open');
+  invCur = null;
+  renderAll();
+  if(more) invNext();
+}
+function deleteInv(id){
+  const e = inventarios.find(function(x){ return x.id===id; }); if(!e) return;
+  appConfirm('¿Eliminar el inventario de '+e.familia+' ('+invPeriodLabel(e.periodo)+')?', function(){
+    inventarios = inventarios.filter(function(x){ return x.id!==id; });
+    persistInv(); renderAll();
+  });
+}
+function invShowDifs(id){
+  const e = inventarios.find(function(x){ return x.id===id; }); if(!e) return;
+  document.getElementById('invdet-title').textContent = e.familia+' · productos con diferencia';
+  const list = e.difs||[];
+  const neg = list.filter(function(x){ return x.v<0; }).reduce(function(a,x){ return a+x.v; },0);
+  const pos = list.filter(function(x){ return x.v>0; }).reduce(function(a,x){ return a+x.v; },0);
+  document.getElementById('invdet-sub').textContent = list.length+' producto(s) con diferencia · faltantes '+money(neg)+' · sobrantes '+money(pos)+' · total '+money(neg+pos)+' (ordenados por valor)';
+  document.getElementById('invdet-table').innerHTML = '<tr><th>Código</th><th>Descripción</th><th class="mono">Sistema</th><th class="mono">Contado</th><th class="mono">Dif.</th><th class="mono">Dif. Gs.</th><th>Obs.</th></tr>' +
+    list.map(function(x){
+      const d = Math.round((x.n-x.e)*1000)/1000;
+      return '<tr><td class="mono">'+escapeHtml(x.c||'')+'</td><td>'+escapeHtml(x.d||'')+'</td><td class="mono">'+x.e+'</td><td class="mono">'+x.n+'</td><td class="mono" style="'+invMoneyCls(d)+'">'+d+'</td><td class="mono" style="'+invMoneyCls(x.v)+'">'+money(x.v)+'</td><td>'+escapeHtml(x.o||'')+'</td></tr>';
+    }).join('');
+  document.getElementById('invdet-overlay').classList.add('open');
+}
+function closeInvDet(){ document.getElementById('invdet-overlay').classList.remove('open'); }
+
+/* ---------- descargar Excel de seguimiento (una hoja por mes, con fórmulas) ---------- */
+async function exportInvExcel(){
+  if(typeof ExcelJS==='undefined'){ appAlert('Para armar el Excel con formato hace falta conexión a internet (se carga una librería). Conectate y probá de nuevo.'); return; }
+  const ps = invPeriods();
+  if(!ps.length){ appAlert('Todavía no hay inventarios cargados.'); return; }
+  const wb = new ExcelJS.Workbook(); wb.creator = COMPANY_NAME; wb.calcProperties = {fullCalcOnLoad:true};
+  const F = 'Calibri', BLUE = 'FF0070C0', RED = 'FFC00000';
+  ps.forEach(function(p){
+    const list = invEntries(p), R = invResumen(p);
+    const ws = wb.addWorksheet(invPeriodLabel(p).slice(0,31));
+    ws.columns = [{width:3},{width:16},{width:26},{width:20},{width:22},{width:14},{width:18},{width:3}];
+    ws.getCell('B2').value = 'Planilla seguimiento efectividad de inventarios.'; ws.getCell('B2').font = {name:F, size:12, bold:true};
+    ws.getCell('B4').value = 'EFECTIVIDAD DE INVENTARIO '+invPeriodLabel(p).toUpperCase(); ws.getCell('B4').font = {name:F, size:11, bold:true};
+    const hr = ws.getRow(5);
+    ['Fecha Relev.Inv.','Familia','Productos contados','Productos cont sin dif','Efectividad','Dif. Gs.'].forEach(function(t,i){
+      const c = hr.getCell(i+2); c.value = t;
+      c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:BLUE}};
+      c.font = {name:F, size:10, bold:true, color:{argb:'FFFFFFFF'}};
+      c.alignment = {horizontal: i>=2 ? 'right' : 'left', vertical:'middle'};
+    });
+    hr.height = 18;
+    list.forEach(function(e,i){
+      const r = ws.getRow(6+i);
+      r.getCell(2).value = e.fecha ? new Date(Date.UTC(+e.fecha.slice(0,4), +e.fecha.slice(5,7)-1, +e.fecha.slice(8,10))) : null;
+      r.getCell(2).numFmt = 'dd/mm/yyyy'; r.getCell(2).alignment = {horizontal:'left'};
+      r.getCell(3).value = e.familia;
+      r.getCell(4).value = e.contados; r.getCell(5).value = e.sinDif;
+      r.getCell(6).value = {formula:'IF(D'+(6+i)+'=0,0,E'+(6+i)+'/D'+(6+i)+')', result: invEf(e)}; r.getCell(6).numFmt = '0.0%';
+      r.getCell(7).value = e.difGs; r.getCell(7).numFmt = '#,##0';
+      r.font = {name:F, size:10};
+      if(e.difGs<0) r.getCell(7).font = {name:F, size:10, color:{argb:RED}};
+    });
+    const a = 6, b = 5+list.length, rr = 7+list.length;
+    const res = ws.getRow(rr);
+    res.getCell(5).value = 'TOTAL DEL MES';
+    res.getCell(7).value = {formula:'SUM(G'+a+':G'+b+')', result:R.total}; res.getCell(7).numFmt = '#,##0';
+    res.font = {name:F, size:10, bold:true};
+    res.eachCell({includeEmpty:true}, function(c,k){ if(k>=5 && k<=7) c.border = {top:{style:'thin'}}; });
+    const rp = ws.getRow(rr+1);
+    rp.getCell(5).value = 'RESULTADO (promedio)';
+    rp.getCell(6).value = {formula:'AVERAGE(F'+a+':F'+b+')', result:R.avg}; rp.getCell(6).numFmt = '0.0%';
+    rp.getCell(7).value = {formula:'AVERAGE(G'+a+':G'+b+')', result:R.prom}; rp.getCell(7).numFmt = '#,##0';
+    rp.font = {name:F, size:10, bold:true};
+    rp.eachCell({includeEmpty:true}, function(c,k){ if(k>=5 && k<=7) c.border = {bottom:{style:'double'}}; });
+    const rp1 = rr+1;
+    ws.getCell('E'+(rr+3)).value = 'Meta de efectividad'; ws.getCell('F'+(rr+3)).value = invConfig.meta/100; ws.getCell('F'+(rr+3)).numFmt = '0%';
+    ws.getCell('E'+(rr+4)).value = 'Resultado positivo';
+    ws.getCell('F'+(rr+4)).value = {formula: invConfig.positivo==='cada' ? 'IF(AND(G'+rp1+'>=0,MIN(G'+a+':G'+b+')>=0),"SÍ","NO")' : 'IF(G'+rp1+'>=0,"SÍ","NO")', result: R.okPos?'SÍ':'NO'};
+    ws.getCell('E'+(rr+5)).value = 'ESTADO DEL PAGO';
+    ws.getCell('F'+(rr+5)).value = {formula:'IF(AND(F'+rp1+'>=F'+(rr+3)+',F'+(rr+4)+'="SÍ"),"SE PAGA","NO SE PAGA")', result: R.paga?'SE PAGA':'NO SE PAGA'};
+    [rr+3,rr+4,rr+5].forEach(function(n){ ws.getRow(n).font = {name:F, size:10, bold: n===rr+5}; ws.getCell('F'+n).alignment = {horizontal:'right'}; });
+    ws.getCell('F'+(rr+5)).font = {name:F, size:11, bold:true, color:{argb: R.paga ? 'FF1D7A4A' : RED}};
+    ws.getCell('B'+(rr+7)).value = invConfig.positivo==='cada' ? 'Para el pago: promedio de efectividad ≥ meta, promedio de Dif. Gs. positivo y ninguna marca en negativo.' : 'Para el pago: promedio de efectividad de las marcas ≥ meta y promedio de Dif. Gs. positivo.';
+    ws.getCell('B'+(rr+7)).font = {name:F, size:9, italic:true, color:{argb:'FF595959'}};
+    ws.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9};
+  });
+  const wd = wb.addWorksheet('Diferencias');
+  wd.columns = [{header:'Período',width:16},{header:'Familia',width:18},{header:'Código',width:12},{header:'Descripción',width:50},{header:'Sistema',width:11},{header:'Contado',width:11},{header:'Dif.',width:9},{header:'Dif. Gs.',width:15},{header:'Observación',width:24}];
+  wd.getRow(1).eachCell(function(c,k){ c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:BLUE}}; c.font = {name:F, size:10, bold:true, color:{argb:'FFFFFFFF'}}; c.alignment = {horizontal: (k>=5&&k<=8)?'right':'left'}; });
+  ps.slice().reverse().forEach(function(p){
+    invEntries(p).forEach(function(e){
+      (e.difs||[]).forEach(function(x){
+        const r = wd.addRow([invPeriodLabel(p), e.familia, x.c||'', x.d||'', x.e, x.n, null, x.v, x.o||'']);
+        r.getCell(7).value = {formula:'F'+r.number+'-E'+r.number, result: Math.round((x.n-x.e)*1000)/1000};
+        r.getCell(8).numFmt = '#,##0'; r.font = {name:F, size:10};
+        if(x.v<0) r.getCell(8).font = {name:F, size:10, color:{argb:RED}};
+      });
+    });
+  });
+  wd.views = [{state:'frozen', ySplit:1}];
+  wd.autoFilter = {from:{row:1,column:1}, to:{row:1,column:9}};
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = 'Efectividad_Inventarios_'+todayISOStr()+'.xlsx';
+  document.body.appendChild(a2); a2.click(); setTimeout(function(){ URL.revokeObjectURL(a2.href); a2.remove(); }, 2000);
+}
+
 function cobSupOfName(name){ return cobConfig.asg[normKey(name||'Sin vendedor')] || 'Sin supervisor'; }
 function cobSupOf(c){ return cobSupOfName(c.vendedor||'Sin vendedor'); }
 function cobList(){ return cobFilter.s ? cobranzas.filter(function(c){ return cobSupOf(c)===cobFilter.s; }) : cobranzas; }

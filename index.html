@@ -789,6 +789,7 @@
       <button type="button" class="btn-ghost danger" onclick="desconectarSync()">Desconectar</button>
       <div style="display:flex;gap:10px;">
         <button type="button" class="btn-ghost" onclick="closeSyncModal()">Cerrar</button>
+        <button type="button" class="btn-ghost" onclick="revisarConexion()">Revisar conexión</button>
         <button type="button" class="btn-primary" onclick="conectarSync()">Conectar y sincronizar</button>
       </div>
     </div>
@@ -1455,8 +1456,13 @@ async function initSyncFromSavedConfig(){
 }
 async function buildPushPayload(){
   const local = { loans: loans, incomes: incomes, pagos: pagos, cobranzas: cobranzas, cobConfig: cobConfig, inventarios: inventarios, invConfig: invConfig };
-  if(appUsers.length===0) return local;
   const remote = await pullFromSupabase();
+  if(remote===false) return null;   // no se pudo leer la nube: no pisar nada
+  if(appUsers.length===0){
+    // si la nube ya tiene usuarios y esta compu no los tiene, esta compu está desactualizada: no sobrescribir
+    if(remote && Array.isArray(remote.appUsers) && remote.appUsers.length>0){ applyRemoteUsers(remote); return null; }
+    return local;
+  }
   if(isAdmin()){
     const users = appUsers.slice(), have = {};
     users.forEach(function(u){ have[u.id] = 1; });
@@ -1480,7 +1486,7 @@ async function pullFromSupabase(){
     return res.data ? res.data.data : null;
   }catch(e){
     console.error('Error al leer de Supabase', e);
-    return null;
+    return false;   // false = error de lectura (distinto de null = todavía no hay datos en la nube)
   }
 }
 let pushDebounceTimer = null;
@@ -1534,6 +1540,21 @@ function openSyncModal(){
 function closeSyncModal(){
   document.getElementById('sync-overlay').classList.remove('open');
 }
+async function revisarConexion(){
+  if(!syncEnabled){ appAlert('Esta computadora no está conectada. Pegá el código y tocá "Conectar y sincronizar".'); return; }
+  let msg;
+  try{
+    const res = await supabaseClient.from('app_state').select('data').eq('id', supabaseConfig.workspace).maybeSingle();
+    if(res.error){ msg = 'Error al leer la nube: '+(res.error.message||res.error.code||'desconocido'); }
+    else if(!res.data){ msg = 'La nube no tiene datos para el espacio "'+supabaseConfig.workspace+'" todavía.'; }
+    else{
+      const d = res.data.data||{};
+      msg = 'Espacio "'+supabaseConfig.workspace+'" encontrado en la nube. — Préstamos: '+((d.loans||[]).length)+' · Cobranzas: '+((d.cobranzas||[]).length)+' · Inventarios: '+((d.inventarios||[]).length)+' — Usuarios: '+((d.appUsers||[]).map(function(u){return u.user+' ('+u.status+')';}).join(', ')||'ninguno');
+    }
+  }catch(e){ msg = 'No se pudo consultar la nube: '+(e.message||e); }
+  msg += '  ||  En esta computadora: usuarios cargados = '+appUsers.length;
+  appAlert(msg);
+}
 async function conectarSync(){
   const url = document.getElementById('sync-url').value.trim();
   const key = document.getElementById('sync-key').value.trim();
@@ -1551,7 +1572,7 @@ async function conectarSync(){
   if(syncEnabled){
     // si el espacio de trabajo estaba vacío del lado del servidor, sube lo que ya había localmente
     const remote = await pullFromSupabase();
-    if(!remote){
+    if(remote===null){
       pushToSupabase();
     }
     loadUsers();

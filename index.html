@@ -769,6 +769,10 @@
     <div id="sync-current-status" style="margin-bottom:14px;"></div>
     <div class="field-grid">
       <div class="field full">
+        <label>¿Tenés un código de conexión? Pegalo acá y se completan los tres datos de abajo</label>
+        <input type="text" id="sync-code" placeholder="eyJ1Ijoi..." oninput="fillSyncFromCode()">
+      </div>
+      <div class="field full">
         <label>Project URL de Supabase</label>
         <input type="text" id="sync-url" placeholder="https://xxxxxxxx.supabase.co">
       </div>
@@ -1550,6 +1554,8 @@ async function conectarSync(){
     if(!remote){
       pushToSupabase();
     }
+    loadUsers();
+    if(appUsers.length>0){ location.reload(); return; }
     renderAll();
     appAlert('Sincronización conectada. A partir de ahora, los cambios se comparten en vivo con cualquier computadora configurada con el mismo ID de espacio de trabajo ("'+workspace+'").');
   }else{
@@ -6649,6 +6655,13 @@ async function doRegister(){
     loginTab('in');
     loginMsg('Listo. Tu usuario quedó pendiente: cuando la administradora lo apruebe vas a poder ingresar.', true);
   }catch(e){ console.error(e); loginMsg('No se pudo crear el usuario. Probá de nuevo.'); }
+}
+function fillSyncFromCode(){
+  const cfg = parseConnCode(document.getElementById('sync-code').value);
+  if(!cfg) return;
+  document.getElementById('sync-url').value = cfg.url;
+  document.getElementById('sync-key').value = cfg.key;
+  document.getElementById('sync-workspace').value = cfg.workspace;
 }
 function parseConnCode(code){
   try{

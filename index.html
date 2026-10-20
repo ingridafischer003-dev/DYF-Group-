@@ -6217,9 +6217,8 @@ function invParseRows(rows, ignorarCero){
     if(/^total/i.test(desc) || /^total/i.test(code)) continue;
     const comp = invNum(g(r,c.comp)), bulto = invNum(g(r,c.bulto)), unid = invNum(g(r,c.unidad));
     const ex = invNum(g(r,c.exist));
-    let conteo;
-    if(comp!=null || bulto!=null || unid!=null) conteo = (comp||0)*(bulto||0) + (unid||0);
-    else conteo = invNum(g(r,c.conteo));
+    let conteo = invNum(g(r,c.conteo));   // el conteo total de la planilla manda
+    if(conteo==null && (comp!=null || bulto!=null || unid!=null)) conteo = (comp||0)*(bulto||0) + (unid||0);
     if(c.desc==null && ex==null && conteo==null) continue;   // fila de título de sección
     if(ex==null && conteo==null) continue;
     conteo = conteo||0;

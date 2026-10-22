@@ -700,10 +700,15 @@
         <span id="ci-quitar-txt"></span>
       </label>
     </div>
-    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink-300);margin:4px 0 14px;">
-      <input type="checkbox" id="ci-cerrar" style="margin-top:3px;">
-      <span>Marcar como cobradas las facturas pendientes que ya no figuran en este reporte (solo de los vendedores marcados y con vencimiento hasta la fecha del reporte, porque las posteriores no vienen en el archivo).</span>
-    </label>
+    <div class="field" style="margin:4px 0 14px;">
+      <label>Cobranzas cargadas antes que ya no figuran en este reporte</label>
+      <select id="ci-cerrar">
+        <option value="quitar">Quitarlas de la app (el reporte nuevo reemplaza a lo anterior)</option>
+        <option value="cobrar">Marcarlas como cobradas (quedan en el historial de lo cobrado)</option>
+        <option value="dejar">Dejarlas como estaban</option>
+      </select>
+      <div class="modal-sub" style="margin:6px 0 0;">Se aplica solo a los vendedores marcados arriba y a facturas con vencimiento hasta la fecha del reporte (las posteriores no vienen en el archivo, por eso no se tocan).</div>
+    </div>
     <div class="section-title" style="margin-top:6px;">Vista previa (primeras filas)</div>
     <div class="ledger" style="margin-bottom:16px;"><table class="ltable" id="cobimp-preview"></table></div>
     <div class="modal-actions spread">
@@ -1271,7 +1276,7 @@ const INV_MARCAS_DEF = ['Nestlé','Roger','Módiga','MG','Vertex','D&F','Alamo']
 let invConfig = {meta:80, positivo:'total', ignorarCero:false, marcas:INV_MARCAS_DEF.slice()};
 function normalizeCobConfig(o){
   const c = {sups:[], asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
-  if(o){ if(o.link===false) c.link = false; if(typeof o.repHasta==='string') c.repHasta = o.repHasta; }
+  if(o){ if(o.link===false) c.link = false; if(typeof o.repHasta==='string') c.repHasta = o.repHasta; if(o.cobModo==='quitar'||o.cobModo==='cobrar'||o.cobModo==='dejar') c.cobModo = o.cobModo; }
   if(o && Array.isArray(o.sups)) c.sups = o.sups.filter(function(x){ return typeof x==='string' && x.trim(); }).map(function(x){ return x.trim(); });
   else c.sups = DEFAULT_SUPS.slice();
   ['asg','excl','names','cliExcl'].forEach(function(k){ if(o && o[k] && typeof o[k]==='object' && !Array.isArray(o[k])) c[k] = o[k]; });
@@ -5495,7 +5500,7 @@ function handleCobExcelSelect(e){
       if(names.length===0){ appAlert('El archivo no tiene ninguna hoja legible. Verificá que sea un Excel válido.'); return; }
       cobSel = {}; cobSupSel = {}; cobCliIgn = {};
       document.getElementById('ci-hasta').value = cobConfig.repHasta || '';
-      document.getElementById('ci-cerrar').checked = !!cobConfig.repHasta;
+      document.getElementById('ci-cerrar').value = cobConfig.cobModo || 'quitar';
       document.getElementById('ci-sheet').innerHTML = names.map(function(n){ return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>'; }).join('');
       onCobSheetChange();
       document.getElementById('cobimp-overlay').classList.add('open');
@@ -5791,12 +5796,15 @@ function confirmCobImport(){
   });
   persistCobConfig();
   const items = cobIncludedItems();
-  const cerrar = document.getElementById('ci-cerrar').checked;
+  const modo = document.getElementById('ci-cerrar').value;
+  const cerrar = modo==='cobrar', borrarViejas = modo==='quitar';
+  cobConfig.cobModo = modo;
   const quitar = document.getElementById('ci-quitar').checked;
   const antesInt = cobranzas.length;
   cobranzas = cobranzas.filter(function(c){ return !ignKeys[normKey(c.cliente)] && !cobConfig.cliExcl[normKey(c.cliente)]; });
   const quitadasInt = antesInt - cobranzas.length;
-  const hasta = document.getElementById('ci-hasta').value || '';
+  let hasta = document.getElementById('ci-hasta').value || '';
+  if(!hasta){ items.forEach(function(it){ if(it.vencimiento && it.vencimiento>hasta) hasta = it.vencimiento; }); }   // sin fecha indicada: se usa el último vencimiento del archivo
   cobConfig.repHasta = hasta;
   persistCobConfig();
   const idx = cobBuildIndex(), seenFile = {};
@@ -5830,6 +5838,17 @@ function confirmCobImport(){
       if(!vistas[c.id] && incl[normKey(c.vendedor||'Sin vendedor')] && cobSaldo(c)>0 && (!hasta || c.vencimiento<=hasta)){ addCobro(c, cobSaldo(c)); c.cobrado = c.monto; cerradas++; }
     });
   }
+  let viejasQuitadas = 0;
+  if(borrarViejas){
+    const antesV = cobranzas.length;
+    cobranzas = cobranzas.filter(function(c){
+      if(vistas[c.id]) return true;
+      if(!incl[normKey(c.vendedor||'Sin vendedor')]) return true;
+      if(hasta && c.vencimiento>hasta) return true;
+      return false;
+    });
+    viejasQuitadas = antesV - cobranzas.length;
+  }
   if(quitar){
     const antes = cobranzas.length;
     cobranzas = cobranzas.filter(function(c){ return !excl[normKey(c.vendedor||'Sin vendedor')]; });
@@ -5846,6 +5865,7 @@ function confirmCobImport(){
   if(repetidas>0) msg += '\n'+repetidas+' fila(s) repetida(s) dentro del archivo se contaron una sola vez.';
   if(nExcl>0) msg += '\nSe ignoraron '+nExcl+' vendedor(es) que no marcaste.';
   if(quitadas>0) msg += '\nSe quitaron '+quitadas+' cobranza(s) cargadas antes de esos vendedores.';
+  if(viejasQuitadas>0) msg += '\nSe quitaron '+viejasQuitadas+' cobranza(s) viejas que ya no figuraban en el reporte.';
   if(cerradas>0) msg += '\n'+cerradas+' cobranza(s) que ya no figuraban en el Excel se marcaron como cobradas.';
   if(res.omitidas.length>0){
     msg += '\n'+res.omitidas.length+' fila(s) no se importaron:';

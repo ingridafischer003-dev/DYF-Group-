@@ -5781,8 +5781,10 @@ function refreshCobPreview(){
 function closeCobImport(){ document.getElementById('cobimp-overlay').classList.remove('open'); }
 function confirmCobImport(){
   const res = cobParsed || parseCob();
-  const incl = {}, excl = {};
-  res.groups.forEach(function(g){ if(cobSel[g.key]) incl[g.key] = true; else excl[g.key] = true; });
+  const incl = {}, excl = {}, enReporte = {};
+  res.groups.forEach(function(g){ enReporte[g.key] = true; if(cobSel[g.key]) incl[g.key] = true; else excl[g.key] = true; });
+  // vendedor que ya no aparece en el reporte (sin facturas pendientes): también se limpia, salvo que lo tengas ignorado
+  const sinFacturas = function(c){ const k = normKey(c.vendedor||'Sin vendedor'); return !enReporte[k] && !cobConfig.excl[k]; };
   // recordar elección y supervisor de cada vendedor del reporte
   res.groups.forEach(function(g){
     cobConfig.names[g.key] = g.name;
@@ -5835,7 +5837,7 @@ function confirmCobImport(){
   if(cerrar){
     // solo entre los vendedores incluidos en este reporte
     cobranzas.forEach(function(c){
-      if(!vistas[c.id] && incl[normKey(c.vendedor||'Sin vendedor')] && cobSaldo(c)>0 && (!hasta || c.vencimiento<=hasta)){ addCobro(c, cobSaldo(c)); c.cobrado = c.monto; cerradas++; }
+      if(!vistas[c.id] && (incl[normKey(c.vendedor||'Sin vendedor')] || sinFacturas(c)) && cobSaldo(c)>0 && (!hasta || c.vencimiento<=hasta)){ addCobro(c, cobSaldo(c)); c.cobrado = c.monto; cerradas++; }
     });
   }
   let viejasQuitadas = 0;
@@ -5843,7 +5845,7 @@ function confirmCobImport(){
     const antesV = cobranzas.length;
     cobranzas = cobranzas.filter(function(c){
       if(vistas[c.id]) return true;
-      if(!incl[normKey(c.vendedor||'Sin vendedor')]) return true;
+      if(!incl[normKey(c.vendedor||'Sin vendedor')] && !sinFacturas(c)) return true;
       if(hasta && c.vencimiento>hasta) return true;
       return false;
     });

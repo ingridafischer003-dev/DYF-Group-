@@ -308,6 +308,7 @@
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
     <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA u otro Excel)</button>
     <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
+    <button class="btn-primary btn-small" data-exp onclick="openEcExport()">📤 Descargar estado de cuenta por marca</button>
     <input type="file" id="plan-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handlePlanFile(event)">
     <input type="file" id="smart-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleSmartExcelSelect(event)">
     <span style="width:1px;background:var(--ink-700);"></span>
@@ -719,6 +720,22 @@
         <button type="button" class="btn-ghost" onclick="closeCobImport()">Cancelar</button>
         <button type="button" class="btn-primary" onclick="confirmCobImport()">Importar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: descargar estado de cuenta por marca -->
+<div class="overlay" id="ecexp-overlay">
+  <div class="modal">
+    <h3>Descargar estado de cuenta por marca</h3>
+    <p class="modal-sub">Excel ordenado con las facturas de la marca, sus cheques y las fechas tal como están hoy en la app (con lo que editaste), listo para enviar.</p>
+    <div class="field"><label>Marca / proveedor</label><select id="ecexp-marca"></select></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-300);margin:4px 0 14px;">
+      <input type="checkbox" id="ecexp-pagados"> <span>Incluir también los cheques ya pagados</span>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeEcExport()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="runEcExport()">Descargar Excel</button>
     </div>
   </div>
 </div>
@@ -3537,7 +3554,7 @@ function confirmPlanImport(){
   let nuevos = 0, dup = 0; const nuevosReg = [];
   act.forEach(function(r){
     r.asig.forEach(function(a,i){
-      const reg = {id:uid('p'), tipo:'Cheque', entidad:prov, concepto:(banco?'Banco: '+banco+' · ':'')+'Factura '+(r.ref||'sin número')+' · cheque '+(i+1)+'/'+r.asig.length, monto:a.monto, fecha:a.fecha, estado:'Pendiente', marca:marca};
+      const reg = {id:uid('p'), tipo:'Cheque', entidad:prov, concepto:(banco?'Banco: '+banco+' · ':'')+'Factura '+(r.ref||('sin número (límite '+formatDate(r.lim).slice(0,5)+')'))+' · cheque '+(i+1)+'/'+r.asig.length, monto:a.monto, fecha:a.fecha, estado:'Pendiente', marca:marca};
       const k = keyOf(reg);
       if(existentes[k]){ dup++; return; }
       nuevosReg.push(reg);
@@ -3546,6 +3563,148 @@ function confirmPlanImport(){
   nuevosReg.forEach(function(x){ pagos.push(x); nuevos++; });
   persistPagos(); closePlanImport(); renderAll();
   appAlert('Listo: se cargaron '+nuevos+' cheque(s) a proveedor'+(dup?'. Se omitieron '+dup+' que ya estaban cargados (mismo proveedor, monto y fecha).':'.'));
+}
+
+/* ---------- descargar estado de cuenta por marca ---------- */
+function ecBrandNames(){
+  const cnt = {};
+  pagos.forEach(function(x){
+    if(x.tipo!=='Cheque') return;
+    const n = x.marca || x.entidad; if(!n) return;
+    const k = normKey(n); cnt[k] = cnt[k] || {}; cnt[k][n] = (cnt[k][n]||0)+1;
+  });
+  return Object.keys(cnt).map(function(k){ return Object.keys(cnt[k]).sort(function(a,b){ return cnt[k][b]-cnt[k][a]; })[0]; }).sort(function(a,b){ return a.localeCompare(b); });
+}
+function openEcExport(){
+  if(!needFlag('descargar','descargar reportes')) return;
+  const nombres = ecBrandNames();
+  if(nombres.length===0){ appAlert('Todavía no hay cheques a proveedores cargados.'); return; }
+  document.getElementById('ecexp-marca').innerHTML = nombres.map(function(n){ return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>'; }).join('');
+  document.getElementById('ecexp-overlay').classList.add('open');
+}
+function closeEcExport(){ document.getElementById('ecexp-overlay').classList.remove('open'); }
+function ecCollect(marca, conPagados){
+  const k = normKey(marca), grupos = {};
+  pagos.forEach(function(x){
+    if(x.tipo!=='Cheque') return;
+    if(normKey(x.marca || x.entidad)!==k) return;
+    if(!conPagados && x.estado!=='Pendiente') return;
+    const m = (x.concepto||'').match(/Factura\s+(.+?)\s*·\s*cheque/i);
+    const banco = ((x.concepto||'').match(/Banco:\s*([^·,\-]+)/i)||[])[1];
+    const nro = ((x.concepto||'').match(/Cheque\s*N[°ºo]\.?\s*(\d+)/i)||[])[1];
+    const key = m ? m[1].trim() : '__sin';
+    const g = grupos[key] = grupos[key] || {ref: m ? m[1].trim() : 'Cheques sin factura indicada', items:[]};
+    g.items.push({fecha:x.fecha, monto:x.monto, estado:x.estado, banco:(banco||'').trim(), nro:nro||''});
+  });
+  const lista = Object.keys(grupos).map(function(g){ const o = grupos[g]; o.items.sort(function(a,b){ return a.fecha.localeCompare(b.fecha); }); o.limite = o.items[o.items.length-1].fecha; return o; });
+  lista.sort(function(a,b){ return a.limite.localeCompare(b.limite) || a.ref.localeCompare(b.ref); });
+  return lista;
+}
+function isoToDate(iso){ return new Date(iso+'T12:00:00'); }
+function runEcExport(){
+  if(!canFlag('descargar')) return;
+  if(typeof ExcelJS==='undefined'){ appAlert('Para armar el Excel con formato hace falta conexión a internet (se carga una librería). Conectate y probá de nuevo.'); return; }
+  const marca = document.getElementById('ecexp-marca').value;
+  const conPagados = document.getElementById('ecexp-pagados').checked;
+  const lista = ecCollect(marca, conPagados);
+  if(lista.length===0){ appAlert('No hay cheques de '+marca+' para descargar con esa selección.'); return; }
+  const DN = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const FONT = 'Calibri', HEAD = 'FFDDEBF7', YEL = 'FFFFFF99', BOR = {style:'thin', color:{argb:'FFBFBFBF'}};
+  const border = {top:BOR, left:BOR, bottom:BOR, right:BOR};
+  const wb = new ExcelJS.Workbook(); wb.creator = COMPANY_NAME; wb.created = new Date(); wb.calcProperties = {fullCalcOnLoad:true};
+  const hoy = new Date().toLocaleDateString('es-PY');
+  const titulo = function(ws, texto, sub, ncols){
+    ws.mergeCells(1,1,1,ncols); ws.mergeCells(2,1,2,ncols);
+    const t = ws.getCell(1,1); t.value = texto; t.font = {name:FONT, size:14, bold:true, color:{argb:'FF1F4E78'}};
+    const u = ws.getCell(2,1); u.value = sub; u.font = {name:FONT, size:10, italic:true, color:{argb:'FF595959'}};
+  };
+  const headRow = function(ws, rowN, labels){
+    labels.forEach(function(l,i){ const c = ws.getCell(rowN, i+1); c.value = l; c.font = {name:FONT, bold:true}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:HEAD}}; c.border = border; c.alignment = {horizontal:'center', vertical:'middle', wrapText:true}; });
+    ws.getRow(rowN).height = 22;
+  };
+  const sub = 'Generado el '+hoy+' · '+(conPagados?'incluye cheques pagados':'solo cheques pendientes');
+
+  /* hoja 1: estado de cuenta por factura */
+  const maxCh = lista.reduce(function(a,g){ return Math.max(a, g.items.length); }, 1);
+  const ws = wb.addWorksheet('Estado de cuenta', {views:[{state:'frozen', ySplit:4}]});
+  const labels = ['Factura','Fecha límite','Total'];
+  for(let i=1;i<=maxCh;i++){ labels.push('Cheque '+i); labels.push('Fecha'); }
+  titulo(ws, 'Estado de cuenta — '+marca+' · '+COMPANY_NAME, sub, labels.length);
+  headRow(ws, 4, labels);
+  const r0 = 5;
+  lista.forEach(function(g,ix){
+    const r = r0+ix, row = ws.getRow(r);
+    row.getCell(1).value = g.ref;
+    row.getCell(2).value = isoToDate(g.limite);
+    const montoCols = [], total = g.items.reduce(function(a,x){ return a+x.monto; },0);
+    for(let i=0;i<maxCh;i++){
+      const it = g.items[i], cm = 4+i*2, cf = 5+i*2;
+      montoCols.push(ws.getColumn(cm).letter);
+      if(it){ row.getCell(cm).value = it.monto; row.getCell(cf).value = isoToDate(it.fecha); }
+    }
+    row.getCell(3).value = {formula:'SUM('+montoCols.map(function(c){ return c+r; }).join(',')+')', result: total};
+    for(let c=1;c<=labels.length;c++){
+      const cell = row.getCell(c); cell.border = border; cell.font = {name:FONT, size:11};
+      if(ix%2===1 && c!==3) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFF7FAFD'}};
+      if(c===2 || (c>=5 && c%2===1)){ cell.numFmt = 'dd/mm/yyyy'; cell.alignment = {horizontal:'center'}; }
+      else if(c>=3){ cell.numFmt = '#,##0'; cell.alignment = {horizontal:'right'}; }
+    }
+    row.getCell(3).fill = {type:'pattern', pattern:'solid', fgColor:{argb:YEL}}; row.getCell(3).font = {name:FONT, size:11, bold:true};
+  });
+  const rl = r0+lista.length-1, rt = rl+1, trow = ws.getRow(rt);
+  trow.getCell(1).value = 'TOTAL';
+  trow.getCell(3).value = {formula:'SUBTOTAL(9,C'+r0+':C'+rl+')', result: lista.reduce(function(a,g){ return a+g.items.reduce(function(b,x){ return b+x.monto; },0); },0)};
+  for(let c=1;c<=labels.length;c++){ const cell = trow.getCell(c); cell.border = border; cell.font = {name:FONT, size:11, bold:true}; cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:HEAD}}; if(c===3){ cell.numFmt = '#,##0'; cell.alignment = {horizontal:'right'}; } }
+  ws.getColumn(1).width = 30; ws.getColumn(2).width = 14; ws.getColumn(3).width = 17;
+  for(let i=0;i<maxCh;i++){ ws.getColumn(4+i*2).width = 15; ws.getColumn(5+i*2).width = 12; }
+  ws.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0};
+
+  /* hoja 2: calendario de pagos (por día) */
+  const porDia = {};
+  lista.forEach(function(g){ g.items.forEach(function(x){ const d = porDia[x.fecha] = porDia[x.fecha] || {n:0, m:0}; d.n++; d.m += x.monto; }); });
+  const fechas = Object.keys(porDia).sort();
+  const w2 = wb.addWorksheet('Pagos por día', {views:[{state:'frozen', ySplit:4}]});
+  titulo(w2, 'Pagos por día — '+marca, sub, 4);
+  headRow(w2, 4, ['Fecha','Día','Cheques','Monto']);
+  fechas.forEach(function(f,i){
+    const r = 5+i, row = w2.getRow(r);
+    row.getCell(1).value = isoToDate(f); row.getCell(2).value = DN[isoToDate(f).getDay()]; row.getCell(3).value = porDia[f].n; row.getCell(4).value = porDia[f].m;
+    for(let c=1;c<=4;c++){ const cell = row.getCell(c); cell.border = border; cell.font = {name:FONT, size:11}; if(i%2===1) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFF7FAFD'}}; }
+    row.getCell(1).numFmt = 'dd/mm/yyyy'; row.getCell(1).alignment = row.getCell(2).alignment = row.getCell(3).alignment = {horizontal:'center'};
+    row.getCell(4).numFmt = '#,##0';
+  });
+  const e2 = 4+fechas.length, t2 = w2.getRow(e2+1);
+  t2.getCell(1).value = 'TOTAL';
+  t2.getCell(3).value = {formula:'SUBTOTAL(9,C5:C'+e2+')', result: fechas.reduce(function(a,f){ return a+porDia[f].n; },0)};
+  t2.getCell(4).value = {formula:'SUBTOTAL(9,D5:D'+e2+')', result: fechas.reduce(function(a,f){ return a+porDia[f].m; },0)};
+  for(let c=1;c<=4;c++){ const cell = t2.getCell(c); cell.border = border; cell.font = {name:FONT, size:11, bold:true}; cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:HEAD}}; }
+  t2.getCell(3).alignment = {horizontal:'center'}; t2.getCell(4).numFmt = '#,##0';
+  [14,8,11,18].forEach(function(w,i){ w2.getColumn(i+1).width = w; });
+
+  /* hoja 3: detalle de cheques */
+  const w3 = wb.addWorksheet('Detalle de cheques', {views:[{state:'frozen', ySplit:4}]});
+  titulo(w3, 'Detalle de cheques — '+marca, sub, 7);
+  headRow(w3, 4, ['Factura','Cheque','Banco','N° de cheque','Fecha','Monto','Estado']);
+  let rr = 5;
+  lista.forEach(function(g){ g.items.forEach(function(x,i){
+    const row = w3.getRow(rr);
+    row.getCell(1).value = g.ref; row.getCell(2).value = (i+1)+'/'+g.items.length; row.getCell(3).value = x.banco; row.getCell(4).value = x.nro;
+    row.getCell(5).value = isoToDate(x.fecha); row.getCell(6).value = x.monto; row.getCell(7).value = x.estado==='Pendiente' ? 'Pendiente' : 'Pagado';
+    for(let c=1;c<=7;c++){ const cell = row.getCell(c); cell.border = border; cell.font = {name:FONT, size:11}; if(rr%2===0) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFF7FAFD'}}; }
+    row.getCell(5).numFmt = 'dd/mm/yyyy'; row.getCell(6).numFmt = '#,##0';
+    row.getCell(2).alignment = row.getCell(5).alignment = row.getCell(7).alignment = {horizontal:'center'};
+    rr++;
+  }); });
+  const t3 = w3.getRow(rr);
+  t3.getCell(1).value = 'TOTAL';
+  t3.getCell(6).value = {formula:'SUBTOTAL(9,F5:F'+(rr-1)+')', result: lista.reduce(function(a,g){ return a+g.items.reduce(function(b,x){ return b+x.monto; },0); },0)};
+  for(let c=1;c<=7;c++){ const cell = t3.getCell(c); cell.border = border; cell.font = {name:FONT, size:11, bold:true}; cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:HEAD}}; }
+  t3.getCell(6).numFmt = '#,##0';
+  [30,9,14,16,13,17,12].forEach(function(w,i){ w3.getColumn(i+1).width = w; });
+  w3.autoFilter = {from:'A4', to:'G4'};
+
+  closeEcExport();
+  cobDownloadXlsx({wbx:wb, name:'Estado_de_cuenta_'+cobSafeName(marca)+'_'+todayISOStr()+'.xlsx'});
 }
 
 /* ---------- pagos y cheques ---------- */

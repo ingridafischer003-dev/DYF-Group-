@@ -729,8 +729,8 @@
     <h3>Importar plan de cheques (estado de cuenta)</h3>
     <p class="modal-sub">Leemos cada factura con su monto total, los cheques en que se divide y la <b>fecha límite de pago</b>. Cada cheque se carga en un día hábil <b>hasta esa fecha</b>, uno por día. Revisá las fechas y confirmá.</p>
     <div class="field-grid">
-      <div class="field"><label>Proveedor</label><input type="text" id="pl-prov" value="Nestle" oninput="plRender()"></div>
-      <div class="field"><label>Marca</label><input type="text" id="pl-marca" value="Nestle"></div>
+      <div class="field"><label>Proveedor</label><input type="text" id="pl-prov" value="Nestle" list="pl-marcas-list" oninput="plRender()"><datalist id="pl-marcas-list"></datalist></div>
+      <div class="field"><label>Marca</label><input type="text" id="pl-marca" value="Nestle" list="pl-marcas-list"></div>
       <div class="field"><label>Banco (opcional)</label><input type="text" id="pl-banco" placeholder="GNB, Atlas, Sudameris…"></div>
       <div class="field"><label>Cómo repartir los cheques antes de la fecha límite</label>
         <select id="pl-modo" onchange="plRender()">
@@ -2107,6 +2107,7 @@ function triggerSmartImport(){
 function handleSmartExcelSelect(e){
   const file = e.target.files[0];
   if(!file) return;
+  planFileName = file.name;
   const reader = new FileReader();
   reader.onload = function(ev){
     try{
@@ -2115,6 +2116,17 @@ function handleSmartExcelSelect(e){
       const validSheetNames = smartWorkbook.SheetNames.filter(function(n){ return !!smartWorkbook.Sheets[n]; });
       if(validSheetNames.length===0){
         appAlert('El archivo no tiene ninguna hoja legible. Verificá que sea un Excel válido.');
+        return;
+      }
+      // si el archivo es un estado de cuenta con "Cheque 1, Cheque 2…" y "Total", se abre el importador de plan de cheques
+      let planRes = null;
+      validSheetNames.some(function(n){
+        planRes = planParseRows(XLSX.utils.sheet_to_json(smartWorkbook.Sheets[n], {header:1, defval:null}));
+        return !!(planRes && planRes.length);
+      });
+      if(planRes && planRes.length){
+        planRows = planRes; planRows.forEach(function(r){ if(!r.lim) r.inc = false; });
+        planApplyBrand(); document.getElementById('plan-overlay').classList.add('open'); plRender();
         return;
       }
       const sheetSelect = document.getElementById('si-sheet');
@@ -3271,7 +3283,7 @@ function renderVencidosNoPagados(){
       '<td class="mono">'+formatDate(it.fechaEfectiva)+'</td>' +
       '<td><span class="badge badge-late">'+diasAtraso+' día'+(diasAtraso===1?'':'s')+'</span></td>' +
       '<td class="mono">'+money(it.monto)+'</td>' +
-      '<td style="text-align:right;"><button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
+      '<td style="text-align:right;white-space:nowrap;">'+(it.pagoId?'<button class="icon-btn" data-mut title="Editar" onclick="editPago(\''+it.pagoId+'\')">✎</button> ':'')+'<button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
     '</tr>';
   }).join('');
   table.innerHTML =
@@ -3362,7 +3374,7 @@ function renderFlujoTab(){
           '<td>'+escapeHtml(it.detalle)+'</td>' +
           '<td class="mono">'+(movido ? formatDate(it.fecha)+' →' : '—')+'</td>' +
           '<td class="mono">'+money(it.monto)+'</td>' +
-          '<td style="text-align:right;"><button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
+          '<td style="text-align:right;white-space:nowrap;">'+(it.pagoId?'<button class="icon-btn" data-mut title="Editar fecha, monto o datos del cheque" onclick="editPago(\''+it.pagoId+'\')">✎</button> <button class="icon-btn danger" data-mut data-del title="Eliminar" onclick="deletePago(\''+it.pagoId+'\')">✕</button> ':'')+'<button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
         '</tr>';
       }).join('') +
       '<tr class="total-row"><td colspan="4">Total del día</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
@@ -3370,7 +3382,7 @@ function renderFlujoTab(){
 }
 
 /* ---------- plan de cheques desde estado de cuenta ---------- */
-let planRows = [];
+let planRows = [], planFileName = '';
 function triggerPlanImport(){ if(!needFlag('importar','importar archivos')) return; document.getElementById('plan-import-input').click(); }
 function planDateISO(v){
   if(v==null || v==='') return '';
@@ -3410,9 +3422,24 @@ function planParseRows(rows){
   }
   return out;
 }
+function planGuessBrand(fname){
+  const f = normKey(fname).replace(/[^a-z0-9 ]/g,' ');
+  const cnt = {};   // clave normalizada -> {escritura: veces}
+  const add = function(n, w){ if(!n) return; const k = normKey(n); cnt[k] = cnt[k] || {}; cnt[k][n] = (cnt[k][n]||0) + w; };
+  pagos.forEach(function(x){ if(x.marca) add(x.marca, 3); if(x.tipo==='Cheque' && x.entidad && x.entidad.length<25) add(x.entidad, 1); });
+  (invConfig.marcas||[]).forEach(function(m){ add(m, 0.1); });
+  const nombres = {};
+  Object.keys(cnt).forEach(function(k){   // se usa la forma que más escribís en tus pagos (ej. "Nestle" y no "Nestlé")
+    nombres[Object.keys(cnt[k]).sort(function(a,b){ return cnt[k][b]-cnt[k][a]; })[0]] = 1;
+  });
+  let best = '';
+  Object.keys(nombres).forEach(function(n){ const k = normKey(n).replace(/[^a-z0-9 ]/g,' ').trim(); if(k.length>=3 && f.indexOf(k)!==-1 && n.length>best.length) best = n; });
+  return best;
+}
 function handlePlanFile(e){
   const file = e.target.files[0]; e.target.value = '';
   if(!file) return;
+  planFileName = file.name;
   const reader = new FileReader();
   reader.onload = function(ev){
     try{
@@ -3426,11 +3453,18 @@ function handlePlanFile(e){
       if(!res || res.length===0){ appAlert('No encontré columnas "Total" y "Cheque 1, Cheque 2…" en el archivo. Revisá que sea el estado de cuenta con los cheques por factura.'); return; }
       planRows = res;
       planRows.forEach(function(r){ if(!r.lim) r.inc = false; });
-      document.getElementById('plan-overlay').classList.add('open');
+      planApplyBrand(); document.getElementById('plan-overlay').classList.add('open');
       plRender();
     }catch(err){ console.error(err); appAlert('No se pudo leer el archivo. Verificá que sea un Excel válido.'); }
   };
   reader.readAsArrayBuffer(file);
+}
+function planApplyBrand(){
+  const b = planGuessBrand(planFileName);
+  if(b){ document.getElementById('pl-prov').value = b; document.getElementById('pl-marca').value = b; }
+  const dl = document.getElementById('pl-marcas-list');
+  const nombres = {}, vistos = {}; pagos.forEach(function(x){ if(x.marca && !vistos[normKey(x.marca)]){ vistos[normKey(x.marca)]=1; nombres[x.marca]=1; } }); (invConfig.marcas||[]).forEach(function(m){ if(!vistos[normKey(m)]){ vistos[normKey(m)]=1; nombres[m]=1; } });
+  dl.innerHTML = Object.keys(nombres).map(function(n){ return '<option value="'+escapeHtml(n)+'">'; }).join('');
 }
 function closePlanImport(){ document.getElementById('plan-overlay').classList.remove('open'); }
 function planIsBiz(iso){ return !isWeekendISO(iso) && !isHolidayISO(iso); }

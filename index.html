@@ -307,6 +307,8 @@
     <button class="btn-primary btn-small" onclick="triggerExcelImport()">📥 Importar desde Excel (plantilla)</button>
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
     <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA u otro Excel)</button>
+    <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
+    <input type="file" id="plan-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handlePlanFile(event)">
     <input type="file" id="smart-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleSmartExcelSelect(event)">
     <span style="width:1px;background:var(--ink-700);"></span>
     <button class="btn-ghost btn-small" onclick="openSyncModal()">🔄 <span id="sync-status-label">Sincronización</span></button>
@@ -716,6 +718,33 @@
       <div style="display:flex;gap:10px;">
         <button type="button" class="btn-ghost" onclick="closeCobImport()">Cancelar</button>
         <button type="button" class="btn-primary" onclick="confirmCobImport()">Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: plan de cheques desde estado de cuenta -->
+<div class="overlay" id="plan-overlay">
+  <div class="modal wide">
+    <h3>Importar plan de cheques (estado de cuenta)</h3>
+    <p class="modal-sub">Leemos cada factura con su monto total, los cheques en que se divide y la <b>fecha límite de pago</b>. Cada cheque se carga en un día hábil <b>hasta esa fecha</b>, uno por día. Revisá las fechas y confirmá.</p>
+    <div class="field-grid">
+      <div class="field"><label>Proveedor</label><input type="text" id="pl-prov" value="Nestle" oninput="plRender()"></div>
+      <div class="field"><label>Marca</label><input type="text" id="pl-marca" value="Nestle"></div>
+      <div class="field"><label>Banco (opcional)</label><input type="text" id="pl-banco" placeholder="GNB, Atlas, Sudameris…"></div>
+      <div class="field"><label>Cómo repartir los cheques antes de la fecha límite</label>
+        <select id="pl-modo" onchange="plRender()">
+          <option value="seguidos">Un cheque por día hábil, seguidos, terminando en la fecha límite</option>
+          <option value="livianos">En los días con menos obligaciones (hasta 6 días hábiles antes)</option>
+        </select>
+      </div>
+    </div>
+    <div class="ledger" style="margin-bottom:12px;max-height:380px;overflow:auto;"><table class="ltable" id="pl-table"></table></div>
+    <div class="modal-actions spread">
+      <span class="pill" id="pl-count">0 cheques</span>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn-ghost" onclick="closePlanImport()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="confirmPlanImport()">Cargar cheques</button>
       </div>
     </div>
   </div>
@@ -3338,6 +3367,151 @@ function renderFlujoTab(){
       }).join('') +
       '<tr class="total-row"><td colspan="4">Total del día</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
   }
+}
+
+/* ---------- plan de cheques desde estado de cuenta ---------- */
+let planRows = [];
+function triggerPlanImport(){ if(!needFlag('importar','importar archivos')) return; document.getElementById('plan-import-input').click(); }
+function planDateISO(v){
+  if(v==null || v==='') return '';
+  if(typeof v==='number' && v>20000 && v<80000){ return new Date(Math.round((v-25569)*86400*1000)).toISOString().slice(0,10); }
+  if(v instanceof Date) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  const m = String(v).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if(m){ const y = m[3].length===2 ? 2000+parseInt(m[3],10) : parseInt(m[3],10); return y+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0'); }
+  return '';
+}
+function planParseRows(rows){
+  let hi = -1, cols = {};
+  for(let i=0;i<Math.min(rows.length,30);i++){
+    const r = rows[i]||[], c = {ch:[]};
+    r.forEach(function(v,j){
+      const h = normHdr(v); if(!h) return;
+      const m = h.match(/^cheque\s*(\d+)$/);
+      if(m) c.ch.push({n:parseInt(m[1],10), j:j});
+      else if(/^total$/.test(h)) c.total = j;
+      else if(/escenario|horario|limite/.test(h) && c.lim==null) c.lim = j;
+      else if(/^(referencia|factura|documento|nro factura)/.test(h) && c.ref==null) c.ref = j;
+      else if(/vencimiento/.test(h) && c.venc==null) c.venc = j;
+    });
+    if(c.ch.length>0 && c.total!=null){ hi = i; cols = c; break; }
+  }
+  if(hi<0) return null;
+  cols.ch.sort(function(a,b){ return a.n-b.n; });
+  const out = [];
+  for(let i=hi+1;i<rows.length;i++){
+    const r = rows[i]||[];
+    const label = String(r[0]||'').trim();
+    if(/^total|^octubre|^noviembre|^diciembre/i.test(label)) continue;
+    const montos = cols.ch.map(function(c){ return invNum(r[c.j]); }).filter(function(x){ return x!=null && x>0; });
+    if(montos.length===0) continue;
+    const total = invNum(r[cols.total]) || montos.reduce(function(a,b){ return a+b; },0);
+    const ref = cols.ref!=null ? String(r[cols.ref]||'').trim() : '';
+    out.push({fila:i+1, ref:ref, total:total, montos:montos, lim: cols.lim!=null ? planDateISO(r[cols.lim]) : '', venc: cols.venc!=null ? planDateISO(r[cols.venc]) : '', inc:true});
+  }
+  return out;
+}
+function handlePlanFile(e){
+  const file = e.target.files[0]; e.target.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const wb = readWorkbookSmart(new Uint8Array(ev.target.result));
+      let res = null;
+      (wb ? wb.SheetNames : []).some(function(n){
+        if(!wb.Sheets[n]) return false;
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, defval:null});
+        res = planParseRows(rows); return !!res;
+      });
+      if(!res || res.length===0){ appAlert('No encontré columnas "Total" y "Cheque 1, Cheque 2…" en el archivo. Revisá que sea el estado de cuenta con los cheques por factura.'); return; }
+      planRows = res;
+      planRows.forEach(function(r){ if(!r.lim) r.inc = false; });
+      document.getElementById('plan-overlay').classList.add('open');
+      plRender();
+    }catch(err){ console.error(err); appAlert('No se pudo leer el archivo. Verificá que sea un Excel válido.'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function closePlanImport(){ document.getElementById('plan-overlay').classList.remove('open'); }
+function planIsBiz(iso){ return !isWeekendISO(iso) && !isHolidayISO(iso); }
+function planAddDays(iso, n){ const d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* calcula las fechas de cada cheque; devuelve [{fecha,monto}] */
+function planAssign(row, modo, load){
+  const hoy = todayISOStr();
+  let last = row.lim, g = 0;
+  while(!planIsBiz(last) && g<15){ last = planAddDays(last,-1); g++; }
+  const cands = []; let d = last; g = 0;
+  while(cands.length<6 && d>=hoy && g<40){ if(planIsBiz(d)) cands.push(d); d = planAddDays(d,-1); g++; }
+  if(cands.length===0) cands.push(last>=hoy ? last : hoy);
+  const k = row.montos.length, res = [];
+  if(modo==='livianos'){
+    const used = {};
+    row.montos.forEach(function(m){
+      const libres = cands.filter(function(c){ return !used[c]; });
+      const pool = libres.length ? libres : cands;
+      const best = pool.slice().sort(function(a,b){ return ((load[a]||0)+m)-((load[b]||0)+m) || (b>a?1:-1); })[0];
+      used[best] = true; load[best] = (load[best]||0)+m; res.push({fecha:best, monto:m});
+    });
+  }else{
+    const dias = cands.slice(0,k).reverse();   // últimos k días hábiles hasta la fecha límite
+    row.montos.forEach(function(m,i){ const f = dias[Math.min(i, dias.length-1)]; res.push({fecha:f, monto:m}); });
+    res.forEach(function(r){ load[r.fecha] = (load[r.fecha]||0)+r.monto; });
+  }
+  res.sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+  res.faltan = k > cands.length && modo!=='livianos' ? k - cands.length : 0;
+  return res;
+}
+function planCompute(){
+  const modo = document.getElementById('pl-modo').value;
+  const load = {};
+  obligacionesByDay().forEach(function(x){ load[x.fecha] = x.total; });
+  const act = planRows.filter(function(r){ return r.inc && r.lim; }).sort(function(a,b){ return a.lim.localeCompare(b.lim); });
+  act.forEach(function(r){ r.asig = planAssign(r, modo, load); });
+  planRows.forEach(function(r){ if(!(r.inc && r.lim)) r.asig = null; });
+}
+function plRender(){
+  planCompute();
+  const hoy = todayISOStr();
+  document.getElementById('pl-table').innerHTML =
+    '<tr><th style="width:34px;"></th><th>Factura</th><th class="mono">Total</th><th class="mono">Cheques</th><th>Fecha límite</th><th>Se cargan el</th></tr>' +
+    planRows.map(function(r,i){
+      const cheq = r.montos.length+' × '+(r.montos.every(function(m){ return m===r.montos[0]; }) ? money(r.montos[0]) : 'montos distintos');
+      let fechas = '<span style="color:var(--ink-400);">Indicá la fecha límite para cargarla</span>';
+      if(r.asig){
+        fechas = r.asig.map(function(a){ return formatDate(a.fecha).slice(0,5); }).join(' · ');
+        if(r.asig.faltan) fechas += ' <span class="badge badge-warn">no alcanzan días hábiles</span>';
+      }
+      return '<tr><td><input type="checkbox" '+(r.inc?'checked ':'')+(r.lim?'':'disabled ')+'onchange="planRows['+i+'].inc=this.checked;plRender()"></td>' +
+        '<td>'+escapeHtml(r.ref||'(sin número)')+'</td><td class="mono">'+money(r.total)+'</td><td class="mono">'+cheq+'</td>' +
+        '<td><input type="date" value="'+r.lim+'" min="'+hoy+'" onchange="planRows['+i+'].lim=this.value;planRows['+i+'].inc=!!this.value;plRender()" style="background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:5px 7px;border-radius:5px;font-family:inherit;font-size:12px;"></td>' +
+        '<td>'+fechas+'</td></tr>';
+    }).join('');
+  const n = planRows.reduce(function(a,r){ return a + (r.asig ? r.asig.length : 0); },0);
+  const tot = planRows.reduce(function(a,r){ return a + (r.asig ? r.asig.reduce(function(x,y){ return x+y.monto; },0) : 0); },0);
+  const sin = planRows.filter(function(r){ return !r.lim; }).length;
+  document.getElementById('pl-count').textContent = n+' cheque(s) · '+money(tot) + (sin ? ' · '+sin+' factura(s) sin fecha límite' : '');
+}
+function confirmPlanImport(){
+  planCompute();
+  const prov = document.getElementById('pl-prov').value.trim(), marca = document.getElementById('pl-marca').value.trim(), banco = document.getElementById('pl-banco').value.trim();
+  if(!prov){ appAlert('Indicá el proveedor.'); return; }
+  const act = planRows.filter(function(r){ return r.asig; });
+  if(act.length===0){ appAlert('No hay facturas marcadas con fecha límite para cargar.'); return; }
+  const keyOf = function(x){ return [normKey(x.entidad), Math.round(x.monto), x.fecha].join('|'); };
+  const existentes = {};
+  pagos.forEach(function(x){ if(x.estado==='Pendiente') existentes[keyOf(x)] = true; });
+  let nuevos = 0, dup = 0; const nuevosReg = [];
+  act.forEach(function(r){
+    r.asig.forEach(function(a,i){
+      const reg = {id:uid('p'), tipo:'Cheque', entidad:prov, concepto:(banco?'Banco: '+banco+' · ':'')+'Factura '+(r.ref||'sin número')+' · cheque '+(i+1)+'/'+r.asig.length, monto:a.monto, fecha:a.fecha, estado:'Pendiente', marca:marca};
+      const k = keyOf(reg);
+      if(existentes[k]){ dup++; return; }
+      nuevosReg.push(reg);
+    });
+  });
+  nuevosReg.forEach(function(x){ pagos.push(x); nuevos++; });
+  persistPagos(); closePlanImport(); renderAll();
+  appAlert('Listo: se cargaron '+nuevos+' cheque(s) a proveedor'+(dup?'. Se omitieron '+dup+' que ya estaban cargados (mismo proveedor, monto y fecha).':'.'));
 }
 
 /* ---------- pagos y cheques ---------- */

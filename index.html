@@ -436,6 +436,14 @@
       </div>
       <div class="stat-grid" id="flujo-summary" style="margin-bottom:20px;"></div>
 
+      <div class="section-title">Buscar cheque por número</div>
+      <p class="modal-sub" style="margin-top:-4px;">Escribí el número de un cheque (o varios, separados por espacio o coma) para ver si ya lo cargaste. Busca en todos los cheques y pagos, también en los ya pagados. También sirve para buscar por proveedor o monto.</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="ck-q" placeholder="Ej: 56528517   ·   o varios: 56528517 48360099 13678404" oninput="ckSearch()" autocomplete="off" style="flex:1;min-width:240px;background:var(--ink-800);border:1px solid var(--ink-700);color:var(--paper);padding:9px 11px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:13px;">
+        <button class="btn-ghost btn-small" onclick="document.getElementById('ck-q').value='';ckSearch()">Limpiar</button>
+      </div>
+      <div id="ck-res" style="margin-bottom:24px;"></div>
+
       <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <span>Resumen semanal — sin préstamos</span>
         <span style="display:flex;gap:8px;align-items:center;">
@@ -3378,6 +3386,45 @@ function renderVencidosNoPagados(){
     body +
     '<tr class="total-row"><td colspan="5">Total no pagado</td><td class="mono">'+money(total)+'</td><td></td></tr>';
 }
+/* ---------- buscador de cheques por número ---------- */
+function ckNumOf(p){ const m = (p.concepto||'').match(/Cheque\s*N[°ºo]\.?\s*(\d+)/i); return m ? m[1] : ''; }
+function ckRow(p){
+  const pend = p.estado==='Pendiente';
+  return '<tr><td>'+escapeHtml(pagoTipoLabel(p.tipo))+'</td><td>'+escapeHtml(p.entidad||'')+'</td><td>'+escapeHtml(p.concepto||'—')+'</td>' +
+    '<td class="mono">'+formatDate(p.fecha)+'</td><td class="mono">'+money(p.monto)+'</td>' +
+    '<td>'+(pend?'<span class="badge badge-warn">Pendiente</span>':'<span class="pill">Pagado</span>')+'</td>' +
+    '<td style="text-align:right;"><button class="icon-btn" data-mut title="Editar" onclick="editPago(\''+p.id+'\')">✎</button></td></tr>';
+}
+function ckSearch(){
+  const box = document.getElementById('ck-res'); if(!box) return;
+  const raw = (document.getElementById('ck-q').value||'').trim();
+  if(!raw){ box.innerHTML = ''; return; }
+  const toks = raw.split(/[\s,;]+/).filter(Boolean);
+  const todosNum = toks.every(function(t){ return /^\d{3,}$/.test(t.replace(/\./g,'')); });
+  const head = '<tr><th>Tipo</th><th>Proveedor / entidad</th><th>Detalle</th><th class="mono">Fecha</th><th class="mono">Monto</th><th>Estado</th><th></th></tr>';
+  if(todosNum){
+    const lineas = [], filas = []; let faltan = 0;
+    toks.forEach(function(t){
+      const n = t.replace(/\./g,'');
+      const hits = pagos.filter(function(p){ return ckNumOf(p)===n || (ckNumOf(p) && ckNumOf(p).indexOf(n)!==-1 && n.length>=5) || (p.concepto||'').replace(/\./g,'').indexOf(n)!==-1; });
+      const porMonto = hits.length ? [] : pagos.filter(function(p){ return String(Math.round(p.monto))===n; });
+      if(hits.length){ hits.forEach(function(p){ if(filas.indexOf(p)===-1) filas.push(p); }); lineas.push('<div style="color:var(--sage);">✔ '+escapeHtml(n)+' — ya está cargado'+(hits.length>1?' ('+hits.length+' veces: revisá si está duplicado)':'')+'</div>'); }
+      else if(porMonto.length){ faltan++; porMonto.forEach(function(p){ if(filas.indexOf(p)===-1) filas.push(p); }); lineas.push('<div style="color:var(--amber);">ℹ '+escapeHtml(n)+' — no figura como número de cheque, pero coincide con el monto de '+porMonto.length+' pago(s)</div>'); }
+      else { faltan++; lineas.push('<div style="color:var(--clay);">✖ '+escapeHtml(n)+' — no está cargado</div>'); }
+    });
+    box.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12.5px;margin-bottom:8px;">'+lineas.join('')+'</div>' +
+      (filas.length ? '<div class="ledger"><table class="ltable">'+head+filas.map(ckRow).join('')+'</table></div>' : '') +
+      (toks.length>1 ? '<p class="modal-sub" style="margin-top:8px;">'+(toks.length-faltan)+' de '+toks.length+' encontrados'+(faltan?' · faltan cargar '+faltan:'')+'.</p>' : '');
+    return;
+  }
+  const q = normKey(raw), qd = raw.replace(/\./g,'');
+  const hits = pagos.filter(function(p){
+    return normKey((p.entidad||'')+' '+(p.concepto||'')+' '+(p.marca||'')+' '+pagoTipoLabel(p.tipo)).indexOf(q)!==-1 || (/^\d+$/.test(qd) && String(Math.round(p.monto)).indexOf(qd)!==-1);
+  }).sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+  if(!hits.length){ box.innerHTML = '<div class="empty" style="padding:14px;">No encontré nada con "'+escapeHtml(raw)+'": no está cargado.</div>'; return; }
+  box.innerHTML = '<div class="ledger"><table class="ltable">'+head+hits.slice(0,80).map(ckRow).join('')+'</table></div>' + (hits.length>80 ? '<p class="modal-sub">Se muestran 80 de '+hits.length+'. Afiná la búsqueda.</p>' : '');
+}
+
 /* ---------- resumen semanal (sin préstamos) ---------- */
 function flujoWeekData(){
   const sel = new Date(flujoSelectedDate+'T00:00:00');
@@ -3434,6 +3481,7 @@ function renderFlujoTab(){
   renderVencidosNoPagados();
   renderCalendar(dayTotalsMap);
   renderFlujoWeek();
+  ckSearch();
 
   const selected = flujoSelectedDate;
   const day = dayTotalsMap[selected];

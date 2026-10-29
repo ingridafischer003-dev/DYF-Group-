@@ -375,11 +375,11 @@
     <button class="btn-ghost btn-small" onclick="downloadTemplate()">📄 Descargar plantilla Excel</button>
     <button class="btn-primary btn-small" onclick="triggerExcelImport()">📥 Importar desde Excel (plantilla)</button>
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
-    <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA u otro Excel)</button>
+    <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA: Excel o PDF)</button>
     <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
     <button class="btn-primary btn-small" data-exp onclick="openEcExport()">📤 Descargar estado de cuenta por marca</button>
     <input type="file" id="plan-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handlePlanFile(event)">
-    <input type="file" id="smart-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleSmartExcelSelect(event)">
+    <input type="file" id="smart-import-input" accept=".xlsx,.xls,.pdf" style="display:none;" onchange="handleSmartExcelSelect(event)">
     <span style="width:1px;background:var(--ink-700);"></span>
     <button class="btn-ghost btn-small" onclick="openSyncModal()">🔄 <span id="sync-status-label">Sincronización</span></button>
   </div>
@@ -2199,10 +2199,54 @@ function triggerSmartImport(){
   }
   document.getElementById('smart-import-input').click();
 }
+
+/* ---------- informe de cheques emitidos adelantados (PDF del sistema) ---------- */
+function parseMidaPdfLines(lines){
+  const out = []; let banco = '';
+  const dre = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
+  lines.forEach(function(ln){
+    const t = String(ln.text||'').replace(/\s+/g,' ').trim();
+    if(!t) return;
+    const cu = t.match(/^Cuenta\s*:\s*\S+\s+del\s+(.+?)\s+[\d.]+\s*Gs/i);
+    if(cu){ banco = cu[1].trim(); return; }
+    const dates = []; let m; dre.lastIndex = 0;
+    while((m = dre.exec(t))) dates.push({iso:m[3]+'-'+m[2]+'-'+m[1], i:m.index, end:m.index+m[0].length});
+    if(dates.length<2) return;                       // encabezados, subtotales por fecha, totales: no tienen dos fechas
+    const am = t.match(/([\d.]{4,})\s*Gs\.?\s*$/); if(!am) return;
+    const antes = t.slice(0, dates[0].i).trim();
+    const cm = antes.match(/(?:^|\s)(\d{7,9})(?:\s|$)/); if(!cm) return;   // N° de cheque
+    const ci = antes.indexOf(cm[1]);
+    const proveedor = antes.slice(0, ci).trim();
+    const concepto = antes.slice(ci+cm[1].length).trim();
+    out.push({banco:banco, proveedor: proveedor || concepto || ('Cheque N° '+cm[1]), cheque:cm[1], concepto: proveedor ? concepto : '', fecha:dates[1].iso, marca:'', monto: parseFloat(am[1].replace(/\./g,''))});
+  });
+  return out;
+}
+async function handleSmartPdf(file){
+  try{
+    setProformaStatus('Leyendo el informe PDF…');
+    await extractPdfText(file);
+    setProformaStatus('');
+    const rows = parseMidaPdfLines(lastPdfLines);
+    if(rows.length===0){ appAlert('No encontré cheques en ese PDF. Tiene que ser el "Informe de Bancos - Cheques Emitidos Adelantados" del sistema. Si lo bajás en Excel también funciona.'); return; }
+    smartModeIsMida = true; midaParsedRows = rows;
+    document.getElementById('si-sheet').innerHTML = '<option>Informe PDF</option>';
+    document.getElementById('si-mida-note').style.display = 'block';
+    document.getElementById('si-generic-fields').style.display = 'none';
+    document.getElementById('smart-import-subtitle').textContent = 'Informe de cheques en PDF detectado. Las páginas en blanco se ignoraron.';
+    document.getElementById('smart-debug').textContent = 'PDF leído: '+rows.length+' cheque(s).';
+    refreshCurrentPreview();
+    document.getElementById('smart-import-overlay').classList.add('open');
+  }catch(err){
+    console.error(err); setProformaStatus('');
+    appAlert('No se pudo leer el PDF. Probá de nuevo o descargalo en Excel.');
+  }
+}
 function handleSmartExcelSelect(e){
   const file = e.target.files[0];
   if(!file) return;
   planFileName = file.name;
+  if(/\.pdf$/i.test(file.name) || file.type==='application/pdf'){ e.target.value = ''; handleSmartPdf(file); return; }
   const reader = new FileReader();
   reader.onload = function(ev){
     try{

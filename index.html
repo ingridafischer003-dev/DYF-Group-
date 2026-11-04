@@ -852,7 +852,7 @@
     <div class="field-grid">
       <div class="field">
         <label>¿Qué tipo de pago es este archivo?</label>
-        <select id="si-tipo" onchange="refreshCurrentPreview()">
+        <select id="si-tipo" onchange="smartTipoTocado=true;refreshCurrentPreview()">
           <option value="Cheque">Cheques a proveedores</option>
           <option value="ChequeGrupo">Cheques a empresas del grupo</option>
           <option value="Otro">Otros pagos</option>
@@ -2245,7 +2245,7 @@ async function handleSmartPdf(file){
 function handleSmartExcelSelect(e){
   const file = e.target.files[0];
   if(!file) return;
-  planFileName = file.name;
+  planFileName = file.name; smartTipoTocado=false; (function(){var t=document.getElementById("si-tipo"); if(t) t.value="Cheque";})();
   if(/\.pdf$/i.test(file.name) || file.type==='application/pdf'){ e.target.value = ''; handleSmartPdf(file); return; }
   const reader = new FileReader();
   reader.onload = function(ev){
@@ -2280,6 +2280,7 @@ function handleSmartExcelSelect(e){
   reader.readAsArrayBuffer(file);
   e.target.value = '';
 }
+var smartTipoTocado=false;
 function onSmartSheetChange(){
   const sheetName = document.getElementById('si-sheet').value;
   const sheet = smartWorkbook.Sheets[sheetName];
@@ -2377,9 +2378,13 @@ function smartCols(){
 function buildPagosFromRows(rows, rowNums, cols, tipo){
   const out = {pagos:[], omitidas:[]};
   const cell = function(row,i){ return i>=0 ? row[i] : ''; };
+  let ultimaEntidad = '';
   rows.forEach(function(row,k){
     const nFila = rowNums ? rowNums[k] : (k+2);
-    const entidadRaw = String(cell(row,cols.entidad)==null?'':cell(row,cols.entidad)).trim();
+    let entidadRaw = String(cell(row,cols.entidad)==null?'':cell(row,cols.entidad)).trim();
+    // beneficiario escrito solo en la primera fila: se arrastra hacia abajo
+    if(entidadRaw){ ultimaEntidad = entidadRaw; }
+    else if(cols.entidad>=0 && ultimaEntidad && cleanNumber(cell(row,cols.monto))>0 && toISODate(cell(row,cols.fecha))){ entidadRaw = ultimaEntidad; }
     const banco = String(cell(row,cols.banco)==null?'':cell(row,cols.banco)).trim();
     const numeroCheque = String(cell(row,cols.numero)==null?'':cell(row,cols.numero)).trim().replace(/\.0+$/,'');
     const descuento = String(cell(row,cols.descuento)==null?'':cell(row,cols.descuento)).trim();
@@ -2416,6 +2421,12 @@ function buildPagosFromRows(rows, rowNums, cols, tipo){
 }
 function refreshSmartPreview(){
   const cols = smartCols();
+  // si el beneficiario es una empresa del grupo conocida, sugerir "Cheques a empresas del grupo"
+  if(!smartTipoTocado && cols.entidad>=0){
+    const hit = smartRows.some(function(r){ return /schapovaloff|todo\s*fresco|ciro|dyf/i.test(String(r[cols.entidad]||'')); });
+    const sel = document.getElementById('si-tipo');
+    if(hit && sel && sel.value==='Cheque') sel.value='ChequeGrupo';
+  }
   const res = buildPagosFromRows(smartRows, smartRowNums, cols, 'Cheque');
   const preview = smartRows.slice(0,8);
   const table = document.getElementById('smart-preview-table');

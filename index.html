@@ -377,6 +377,7 @@
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
     <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA: Excel o PDF)</button>
     <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
+    <button class="btn-primary btn-small" data-mut onclick="openCanje()">🔁 Marcar cheques en canje</button>
     <button class="btn-primary btn-small" data-exp onclick="openEcExport()">📤 Descargar estado de cuenta por marca</button>
     <input type="file" id="plan-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handlePlanFile(event)">
     <input type="file" id="smart-import-input" accept=".xlsx,.xls,.pdf" style="display:none;" onchange="handleSmartExcelSelect(event)">
@@ -1001,6 +1002,21 @@
     <div class="modal-actions">
       <button type="button" class="btn-ghost" onclick="closeConfirm(false)">Cancelar</button>
       <button type="button" class="btn-primary" onclick="closeConfirm(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="canje-overlay">
+  <div class="modal" style="max-width:820px;">
+    <h3>Cheques en canje</h3>
+    <p class="modal-sub">Cheques que intercambiás con un proveedor (ellos usan los tuyos y vos los de ellos, mismo monto y fecha). Los marcados como canje se ven en el flujo pero <b>no suman</b> al total a pagar del día.</p>
+    <div class="field"><label>Proveedores (separá con coma)</label><input id="canje-q" type="text" value="Schapovaloff, Todo Fresco" oninput="canjeRender()"></div>
+    <div id="canje-list" style="max-height:340px;overflow:auto;margin-top:10px;"></div>
+    <div id="canje-sum" class="modal-sub" style="margin-top:8px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeCanje()">Cerrar</button>
+      <button type="button" class="btn-ghost" onclick="canjeApply(false)">Quitar canje a los marcados</button>
+      <button type="button" class="btn-primary" onclick="canjeApply(true)">Marcar como canje</button>
     </div>
   </div>
 </div>
@@ -2679,7 +2695,7 @@ function allObligaciones(){
       entidad:p.entidad, detalle:p.concepto || '—',
       monto:p.monto, capital:p.monto, interes:0,
       fecha:p.fecha, fechaEfectiva: nextBusinessDay(p.fecha), d:daysUntil(p.fecha),
-      pagoId:p.id
+      pagoId:p.id, canje:!!p.canje
     });
   });
   return items;
@@ -2693,7 +2709,8 @@ function obligacionesByDay(){
   const map = {};
   allObligaciones().forEach(function(it){
     const key = it.fechaEfectiva || it.fecha;
-    if(!map[key]) map[key] = {fecha:key, total:0, prestamos:0, cheques:0, chequesGrupo:0, otros:0, items:[]};
+    if(!map[key]) map[key] = {fecha:key, total:0, prestamos:0, cheques:0, chequesGrupo:0, otros:0, canjes:0, items:[]};
+    if(it.canje){ map[key].canjes += it.monto; map[key].items.push(it); return; }
     map[key].total += it.monto;
     if(it.fuente==='Prestamo') map[key].prestamos += it.monto;
     else if(it.fuente==='Cheque') map[key].cheques += it.monto;
@@ -3445,7 +3462,7 @@ function renderVencidosNoPagados(){
 function ckNumOf(p){ const m = (p.concepto||'').match(/Cheque\s*N[°ºo]\.?\s*(\d+)/i); return m ? m[1] : ''; }
 function ckRow(p){
   const pend = p.estado==='Pendiente';
-  return '<tr><td>'+escapeHtml(pagoTipoLabel(p.tipo))+'</td><td>'+escapeHtml(p.entidad||'')+'</td><td>'+escapeHtml(p.concepto||'—')+'</td>' +
+  return '<tr><td>'+escapeHtml(pagoTipoLabel(p.tipo))+(p.canje?' <span class="badge badge-warn">Canje</span>':'')+'</td><td>'+escapeHtml(p.entidad||'')+'</td><td>'+escapeHtml(p.concepto||'—')+'</td>' +
     '<td class="mono">'+formatDate(p.fecha)+'</td><td class="mono">'+money(p.monto)+'</td>' +
     '<td>'+(pend?'<span class="badge badge-warn">Pendiente</span>':'<span class="pill">Pagado</span>')+'</td>' +
     '<td style="text-align:right;"><button class="icon-btn" data-mut title="Editar" onclick="editPago(\''+p.id+'\')">✎</button></td></tr>';
@@ -3548,7 +3565,8 @@ function renderFlujoTab(){
     '<div class="stat"><div class="stat-label">Cuotas de préstamos</div><div class="stat-value">'+money(day?day.prestamos:0)+'</div></div>' +
     '<div class="stat"><div class="stat-label">Cheques a proveedores</div><div class="stat-value">'+money(day?day.cheques:0)+'</div></div>' +
     '<div class="stat"><div class="stat-label">Cheques a empresas del grupo</div><div class="stat-value">'+money(day?day.chequesGrupo:0)+'</div></div>' +
-    '<div class="stat"><div class="stat-label">Otros pagos</div><div class="stat-value">'+money(day?day.otros:0)+'</div></div>';
+    '<div class="stat"><div class="stat-label">Otros pagos</div><div class="stat-value">'+money(day?day.otros:0)+'</div></div>' +
+    (day && day.canjes>0 ? '<div class="stat"><div class="stat-label">Canjes (neto 0, no suman)</div><div class="stat-value" style="color:var(--amber);">'+money(day.canjes)+'</div><div class="stat-sub">Cheques cruzados con el proveedor</div></div>' : '');
 
   const dayTable = document.getElementById('flujo-day-table');
   if(!day || day.items.length===0){
@@ -3559,15 +3577,15 @@ function renderFlujoTab(){
       items.map(function(it){
         const movido = it.fechaEfectiva!==it.fecha;
         return '<tr>' +
-          '<td>'+escapeHtml(it.fuenteLabel)+'</td>' +
+          '<td>'+escapeHtml(it.fuenteLabel)+(it.canje?' <span class="badge badge-warn">Canje</span>':'')+'</td>' +
           '<td>'+escapeHtml(it.entidad)+'</td>' +
           '<td>'+escapeHtml(it.detalle)+'</td>' +
           '<td class="mono">'+(movido ? formatDate(it.fecha)+' →' : '—')+'</td>' +
-          '<td class="mono">'+money(it.monto)+'</td>' +
+          '<td class="mono"'+(it.canje?' style="opacity:.55;"':'')+'>'+money(it.monto)+'</td>' +
           '<td style="text-align:right;white-space:nowrap;">'+(it.pagoId?'<button class="icon-btn" data-mut title="Editar fecha, monto o datos del cheque" onclick="editPago(\''+it.pagoId+'\')">✎</button> <button class="icon-btn danger" data-mut data-del title="Eliminar" onclick="deletePago(\''+it.pagoId+'\')">✕</button> ':'')+'<button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
         '</tr>';
       }).join('') +
-      '<tr class="total-row"><td colspan="4">Total del día</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
+      '<tr class="total-row"><td colspan="4">Total del día'+(day.canjes>0?' (sin canjes)':'')+'</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
   }
 }
 
@@ -3747,6 +3765,35 @@ function ecBrandNames(){
     const k = normKey(n); cnt[k] = cnt[k] || {}; cnt[k][n] = (cnt[k][n]||0)+1;
   });
   return Object.keys(cnt).map(function(k){ return Object.keys(cnt[k]).sort(function(a,b){ return cnt[k][b]-cnt[k][a]; })[0]; }).sort(function(a,b){ return a.localeCompare(b); });
+}
+function openCanje(){ if(!needFlag('importar','marcar canjes')) return; document.getElementById('canje-overlay').classList.add('open'); canjeRender(); }
+function closeCanje(){ document.getElementById('canje-overlay').classList.remove('open'); }
+function canjeMatches(){
+  const toks = (document.getElementById('canje-q').value||'').split(/[,;]+/).map(function(t){ return normKey(t.trim()); }).filter(Boolean);
+  if(!toks.length) return [];
+  return pagos.filter(function(p){
+    if(p.estado!=='Pendiente' || p.tipo==='Otro') return false;
+    const k = normKey((p.entidad||'')+' '+(p.concepto||''));
+    return toks.some(function(t){ return k.indexOf(t)!==-1; });
+  }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+}
+function canjeRender(){
+  const rows = canjeMatches(), box = document.getElementById('canje-list');
+  if(!rows.length){ box.innerHTML = '<div class="empty" style="padding:14px;">No hay cheques pendientes de esos proveedores.</div>'; document.getElementById('canje-sum').textContent=''; return; }
+  box.innerHTML = '<table class="ltable"><tr><th><input type="checkbox" checked onchange="var v=this.checked;document.querySelectorAll(\'.canje-ck\').forEach(function(c){c.checked=v;});canjeSum()"></th><th>Proveedor</th><th class="mono">Fecha</th><th class="mono">Monto</th><th>Estado</th></tr>' +
+    rows.map(function(p){ return '<tr><td><input type="checkbox" class="canje-ck" value="'+p.id+'" '+(p.canje?'':'checked')+' onchange="canjeSum()"></td><td>'+escapeHtml(p.entidad||'')+'</td><td class="mono">'+formatDate(p.fecha)+'</td><td class="mono">'+money(p.monto)+'</td><td>'+(p.canje?'<span class="badge badge-warn">Canje</span>':'—')+'</td></tr>'; }).join('') + '</table>';
+  canjeSum();
+}
+function canjeSum(){
+  let n=0,t=0; document.querySelectorAll('.canje-ck:checked').forEach(function(c){ const p = pagos.find(function(x){ return x.id===c.value; }); if(p){ n++; t+=p.monto; } });
+  document.getElementById('canje-sum').textContent = n+' cheque(s) seleccionado(s) · '+money(t);
+}
+function canjeApply(on){
+  const ids = Array.prototype.map.call(document.querySelectorAll('.canje-ck:checked'), function(c){ return c.value; });
+  if(!ids.length){ appAlert('Marcá al menos un cheque.'); return; }
+  pagos.forEach(function(p){ if(ids.indexOf(p.id)!==-1){ if(on) p.canje = true; else delete p.canje; } });
+  persistPagos(); renderAll(); canjeRender();
+  appAlert(ids.length+' cheque(s) '+(on?'marcados como canje: ya no suman al total a pagar.':'sin canje: vuelven a sumar al total a pagar.'));
 }
 function openEcExport(){
   if(!needFlag('descargar','descargar reportes')) return;

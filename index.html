@@ -2125,10 +2125,11 @@ function detectSmartColumns(headers, rows){
   }
   const idxFecha = take('fecha');
   const idxMonto = take('monto');
+  let idxBanco = take('banco',{exactOnly:true});   // una columna llamada "Banco" es el banco del cheque, no "descontado en"
   const idxDescuento = take('descuento');
   const idxPago = take('pago',{exactOnly:true});
   const idxMarca = take('marca');
-  const idxBanco = take('banco');
+  if(idxBanco<0) idxBanco = take('banco');
   const idxEntidad = take('entidad');
   let idxNumero = take('numero');
   if(idxNumero<0){ idxNumero = sniffNumeroColumn(rows, headers.length, used); if(idxNumero>=0) used.push(idxNumero); }

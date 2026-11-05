@@ -374,6 +374,8 @@
     <span style="width:1px;background:var(--ink-700);"></span>
     <button class="btn-ghost btn-small" onclick="downloadTemplate()">📄 Descargar plantilla Excel</button>
     <button class="btn-primary btn-small" onclick="triggerExcelImport()">📥 Importar desde Excel (plantilla)</button>
+    <button class="btn-primary btn-small" data-mut data-imp onclick="triggerBankLoansImport()">🏦 Importar préstamos de bancos (Excel)</button>
+    <input type="file" id="bankloans-input" accept=".xlsx,.xls" style="display:none;" onchange="handleBankLoansFile(event)">
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
     <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA: Excel o PDF)</button>
     <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
@@ -1053,25 +1055,37 @@
 
 <!-- Modal: descargar resumen de préstamos -->
 <div class="overlay" id="resumen-overlay">
-  <div class="modal">
+  <div class="modal" style="max-width:720px;">
     <h3>Descargar resumen de préstamos</h3>
-    <p class="modal-sub">Elegí el banco y el formato del archivo.</p>
-    <div class="field-grid">
-      <div class="field full">
-        <label>Banco</label>
-        <select id="resumen-banco"></select>
-      </div>
-      <div class="field full">
-        <label>Formato</label>
-        <select id="resumen-formato">
-          <option value="excel">Excel (.xlsx)</option>
-          <option value="pdf">PDF</option>
-        </select>
-      </div>
+    <p class="modal-sub">Elegí los bancos y los años que querés presentar. El archivo incluye solo lo seleccionado.</p>
+    <div class="field full"><label>Bancos <a href="#" onclick="resumenAll('rs-banco',true);return false;" style="font-size:11px;">todos</a> · <a href="#" onclick="resumenAll('rs-banco',false);return false;" style="font-size:11px;">ninguno</a></label>
+      <div id="resumen-bancos" style="display:flex;flex-wrap:wrap;gap:8px 18px;"></div></div>
+    <div class="field full" style="margin-top:12px;"><label>Años (según vencimiento de las cuotas) <a href="#" onclick="resumenAll('rs-year',true);return false;" style="font-size:11px;">todos</a> · <a href="#" onclick="resumenAll('rs-year',false);return false;" style="font-size:11px;">ninguno</a></label>
+      <div id="resumen-years" style="display:flex;flex-wrap:wrap;gap:8px 18px;"></div></div>
+    <div class="field-grid" style="margin-top:12px;">
+      <div class="field"><label>Cuotas a incluir</label>
+        <select id="resumen-cuotas"><option value="todas">Todas (pagadas y pendientes)</option><option value="pend">Solo pendientes</option></select></div>
+      <div class="field"><label>Formato</label>
+        <select id="resumen-formato"><option value="excel">Excel (.xlsx)</option><option value="pdf">PDF</option></select></div>
     </div>
+    <div id="resumen-sel" class="modal-sub" style="margin-top:6px;"></div>
     <div class="modal-actions">
       <button type="button" class="btn-ghost" onclick="closeResumenModal()">Cancelar</button>
       <button type="button" class="btn-primary" onclick="descargarResumen()">Descargar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="bl-overlay">
+  <div class="modal" style="max-width:980px;">
+    <h3>Importar préstamos de bancos</h3>
+    <p class="modal-sub" id="bl-sub"></p>
+    <div id="bl-list" style="max-height:380px;overflow:auto;"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;"><input type="checkbox" id="bl-past" checked> Las cuotas con fecha anterior a hoy se marcan como pagadas (las de préstamos "cancelado" siempre)</label>
+    <div id="bl-sum" class="modal-sub" style="margin-top:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeBankLoans()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmBankLoans()">Importar seleccionados</button>
     </div>
   </div>
 </div>
@@ -2869,164 +2883,295 @@ function renderPriorityTab(){
 
 /* ---------- resumen de préstamos (Excel / PDF) ---------- */
 function openResumenModal(){
+  if(loans.length===0){ appAlert('Todavía no hay préstamos cargados.'); return; }
   const bancos = Array.from(new Set(loans.map(function(l){ return l.banco; }))).sort();
-  const sel = document.getElementById('resumen-banco');
-  sel.innerHTML = '<option value="">Todos los bancos</option>' + bancos.map(function(b){
-    return '<option value="'+escapeHtml(b)+'">'+escapeHtml(b)+'</option>';
-  }).join('');
+  const years = {};
+  loans.forEach(function(l){ (l.cuotas||[]).forEach(function(c){ if(c.fecha) years[c.fecha.slice(0,4)] = 1; }); });
+  const ys = Object.keys(years).sort();
+  const nowY = String(new Date().getFullYear());
+  document.getElementById('resumen-bancos').innerHTML = bancos.map(function(b){
+    return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" class="rs-banco" value="'+escapeHtml(b)+'" checked onchange="resumenSel()">'+escapeHtml(b)+'</label>'; }).join('');
+  document.getElementById('resumen-years').innerHTML = ys.map(function(y){
+    return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" class="rs-year" value="'+y+'" checked onchange="resumenSel()">'+y+'</label>'; }).join('') || '<span class="modal-sub">Sin cuotas con fecha.</span>';
   document.getElementById('resumen-overlay').classList.add('open');
+  resumenSel();
+}
+function resumenAll(cls, on){ document.querySelectorAll('.'+cls).forEach(function(c){ c.checked = on; }); resumenSel(); }
+function resumenOpts(){
+  return {
+    bancos: Array.prototype.map.call(document.querySelectorAll('.rs-banco:checked'), function(c){ return c.value; }),
+    years: Array.prototype.map.call(document.querySelectorAll('.rs-year:checked'), function(c){ return c.value; }),
+    soloPend: document.getElementById('resumen-cuotas').value==='pend'
+  };
+}
+function resumenSel(){
+  const o = resumenOpts(); let n = 0, k = 0;
+  loans.forEach(function(l){ if(o.bancos.indexOf(l.banco)===-1) return; n++; (l.cuotas||[]).forEach(function(c){ if(o.years.indexOf((c.fecha||'').slice(0,4))!==-1) k++; }); });
+  document.getElementById('resumen-sel').textContent = n+' préstamo(s) · '+k+' cuota(s) en el período elegido.';
 }
 function closeResumenModal(){
   document.getElementById('resumen-overlay').classList.remove('open');
 }
-function buildResumenRows(bancoFiltro){
-  return loans
-    .filter(function(l){ return !bancoFiltro || l.banco===bancoFiltro; })
-    .map(function(l){
-      const t = loanTotals(l);
-      return {
-        'Banco': l.banco,
-        'N° Operación': l.numeroOperacion || 's/n',
-        'Sistema': SISTEMA_LABELS[l.tipoCuota] || l.tipoCuota,
-        'Monto Original (Gs.)': l.montoOriginal || 0,
-        'Tasa Anual (%)': l.tasaAnual || 0,
-        'Saldo Pendiente (Gs.)': t.saldoPendiente,
-        'Interés Pagado (Gs.)': t.interesPagado,
-        'Interés Pendiente (Gs.)': t.interesPendiente,
-        'Gastos Admin. (Gs.)': t.gastosTotal,
-        'Costo Financiero Total (Gs.)': t.costoFinancieroTotal,
-        'Cuotas Pagadas': t.cuotasPag,
-        'Cuotas Pendientes': t.cuotasPend,
-        'Próximo Vencimiento': t.proxima ? formatDate(t.proxima.fecha) : '—'
-      };
-    });
+function cuotasDePeriodo(l, o){
+  return (l.cuotas||[]).filter(function(c){
+    if(o.years.indexOf((c.fecha||'').slice(0,4))===-1) return false;
+    return !o.soloPend || c.estado==='Pendiente';
+  }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
 }
-function buildProformaBlocks(bancoFiltro){
+function buildResumenRows(o){
+  return loans.filter(function(l){ return o.bancos.indexOf(l.banco)!==-1; }).map(function(l){
+    const t = loanTotals(l), cp = cuotasDePeriodo(l, o);
+    let cap=0, int=0, gas=0; cp.forEach(function(c){ cap+=c.capital; int+=c.interes; gas+=(c.gastos||0); });
+    return {
+      'Banco': l.banco,
+      'N° Operación': l.numeroOperacion || 's/n',
+      'Sistema': SISTEMA_LABELS[l.tipoCuota] || l.tipoCuota,
+      'Desembolso': l.fechaInicio ? formatDate(l.fechaInicio) : '—',
+      'Monto Original (Gs.)': l.montoOriginal || 0,
+      'Tasa Anual (%)': l.tasaAnual || 0,
+      'Cuotas del período': cp.length,
+      'Capital del período (Gs.)': cap,
+      'Interés del período (Gs.)': int,
+      'Gastos del período (Gs.)': gas,
+      'Total del período (Gs.)': cap+int+gas,
+      'Saldo Pendiente total (Gs.)': t.saldoPendiente,
+      'Próximo Vencimiento': t.proxima ? formatDate(t.proxima.fecha) : '—'
+    };
+  }).filter(function(r){ return r['Cuotas del período']>0; });
+}
+function buildProformaBlocks(o){
   const byBanco = {};
-  loans
-    .filter(function(l){ return !bancoFiltro || l.banco===bancoFiltro; })
-    .forEach(function(l){
-      const sorted = l.cuotas.slice().sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
-      let saldo = l.montoOriginal || 0;
-      const cuotasPend = [];
-      sorted.forEach(function(c){
-        const saldoAntes = saldo;
-        saldo -= c.capital;
-        if(c.estado!=='Pendiente') return;
-        cuotasPend.push({
-          numero: c.numero, fecha: c.fecha,
-          saldoCapital: Math.max(0, Math.round(saldoAntes)),
-          capital: c.capital, interes: c.interes, gastos: c.gastos||0,
-          total: c.capital + c.interes + (c.gastos||0)
-        });
-      });
-      if(cuotasPend.length===0) return;
-      if(!byBanco[l.banco]) byBanco[l.banco] = [];
-      byBanco[l.banco].push({
-        numeroOperacion: l.numeroOperacion || 's/n',
-        montoOriginal: l.montoOriginal || 0,
-        tasaAnual: l.tasaAnual || 0,
-        sistema: SISTEMA_LABELS[l.tipoCuota] || l.tipoCuota,
-        cuotas: cuotasPend
-      });
+  loans.filter(function(l){ return o.bancos.indexOf(l.banco)!==-1; }).forEach(function(l){
+    const sorted = (l.cuotas||[]).slice().sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+    let saldo = l.montoOriginal || 0; const lista = [];
+    sorted.forEach(function(c){
+      const saldoAntes = saldo; saldo -= c.capital;
+      if(o.years.indexOf((c.fecha||'').slice(0,4))===-1) return;
+      if(o.soloPend && c.estado!=='Pendiente') return;
+      lista.push({numero:c.numero, fecha:c.fecha, saldoCapital:Math.max(0,Math.round(saldoAntes)), capital:c.capital, interes:c.interes, gastos:c.gastos||0,
+                  total:c.capital+c.interes+(c.gastos||0), estado:c.estado==='Pendiente'?'Pendiente':'Pagada'});
     });
-  return Object.keys(byBanco).sort().map(function(banco){ return { banco: banco, loans: byBanco[banco] }; });
+    if(!lista.length) return;
+    (byBanco[l.banco] = byBanco[l.banco] || []).push({numeroOperacion:l.numeroOperacion||'s/n', montoOriginal:l.montoOriginal||0, tasaAnual:l.tasaAnual||0,
+      sistema:SISTEMA_LABELS[l.tipoCuota]||l.tipoCuota, cuotas:lista});
+  });
+  return Object.keys(byBanco).sort().map(function(banco){ return {banco:banco, loans:byBanco[banco]}; });
+}
+function buildPorAnio(o){
+  const m = {};
+  loans.filter(function(l){ return o.bancos.indexOf(l.banco)!==-1; }).forEach(function(l){
+    cuotasDePeriodo(l, o).forEach(function(c){
+      const k = l.banco+'|'+c.fecha.slice(0,4); const r = m[k] = m[k] || {banco:l.banco, anio:c.fecha.slice(0,4), cap:0, int:0, gas:0};
+      r.cap += c.capital; r.int += c.interes; r.gas += (c.gastos||0);
+    });
+  });
+  return Object.keys(m).sort().map(function(k){ return m[k]; });
 }
 function descargarResumen(){
-  const bancoFiltro = document.getElementById('resumen-banco').value;
+  const o = resumenOpts();
+  if(!o.bancos.length){ appAlert('Marcá al menos un banco.'); return; }
+  if(!o.years.length){ appAlert('Marcá al menos un año.'); return; }
   const formato = document.getElementById('resumen-formato').value;
-  const rows = buildResumenRows(bancoFiltro);
-  if(rows.length===0){
-    appAlert('No hay préstamos cargados para ese banco.');
-    return;
-  }
-  const blocks = buildProformaBlocks(bancoFiltro);
-  const nombreBanco = bancoFiltro ? bancoFiltro.replace(/[^\w]+/g,'_') : 'todos_los_bancos';
+  const rows = buildResumenRows(o);
+  if(rows.length===0){ appAlert('No hay cuotas para esos bancos y años.'); return; }
+  const blocks = buildProformaBlocks(o), porAnio = buildPorAnio(o);
+  const todosBancos = document.querySelectorAll('.rs-banco').length===o.bancos.length;
+  const nombreBanco = todosBancos ? 'todos_los_bancos' : o.bancos.join('_').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w]+/g,'_');
+  const yrs = o.years.slice().sort(); const tag = yrs.length>1 ? yrs[0]+'-'+yrs[yrs.length-1] : yrs[0];
   const fechaHoy = todayISOStr();
+  const titulo = 'Resumen de préstamos'+(todosBancos?'':' — '+o.bancos.join(', '))+' · '+yrs.join(', ');
 
   if(formato==='excel'){
-    if(typeof XLSX==='undefined'){
-      appAlert('No se pudo cargar el generador de Excel (revisá tu conexión a internet).');
-      return;
-    }
-    const ws = XLSX.utils.json_to_sheet(rows);
+    if(typeof XLSX==='undefined'){ appAlert('No se pudo cargar el generador de Excel (revisá tu conexión a internet).'); return; }
     const wb = XLSX.utils.book_new();
+    const tot = {'Banco':'TOTAL'}; Object.keys(rows[0]).forEach(function(k){ if(/\(Gs\.\)/.test(k) && !/Tasa|Original|Saldo/.test(k) || k==='Cuotas del período') tot[k] = rows.reduce(function(a,r){ return a+(r[k]||0); },0); });
+    rows.push(tot);
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:16},{wch:14},{wch:14},{wch:12},{wch:18},{wch:10},{wch:10},{wch:20},{wch:20},{wch:18},{wch:20},{wch:22},{wch:16}];
     XLSX.utils.book_append_sheet(wb, ws, 'Resumen');
-
+    const aa = [['Banco','Año','Capital (Gs.)','Interés (Gs.)','Gastos (Gs.)','Total (Gs.)']]; let tc=0,ti=0,tg=0;
+    porAnio.forEach(function(r){ aa.push([r.banco, r.anio, r.cap, r.int, r.gas, r.cap+r.int+r.gas]); tc+=r.cap; ti+=r.int; tg+=r.gas; });
+    aa.push(['TOTAL','',tc,ti,tg,tc+ti+tg]);
+    const wsA = XLSX.utils.aoa_to_sheet(aa); wsA['!cols']=[{wch:18},{wch:8},{wch:20},{wch:20},{wch:16},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsA, 'Por año');
     const aoa = [];
     blocks.forEach(function(b){
-      aoa.push(['BANCO: '+b.banco]);
-      aoa.push([]);
+      aoa.push(['BANCO: '+b.banco]); aoa.push([]);
       b.loans.forEach(function(l){
         aoa.push(['N° Operación: '+l.numeroOperacion, '', 'Monto: '+money(l.montoOriginal), '', 'Tasa: '+l.tasaAnual+'%', '', 'Sistema: '+l.sistema]);
-        aoa.push(['Cuota','Vencimiento','Saldo Capital (Gs.)','Capital (Gs.)','Interés (Gs.)','Gastos (Gs.)','Total Cuota (Gs.)']);
-        l.cuotas.forEach(function(c){
-          aoa.push([c.numero, formatDate(c.fecha), c.saldoCapital, c.capital, c.interes, c.gastos, c.total]);
-        });
+        aoa.push(['Cuota','Vencimiento','Saldo Capital (Gs.)','Capital (Gs.)','Interés (Gs.)','Gastos (Gs.)','Total Cuota (Gs.)','Estado']);
+        l.cuotas.forEach(function(c){ aoa.push([c.numero, formatDate(c.fecha), c.saldoCapital, c.capital, c.interes, c.gastos, c.total, c.estado]); });
         aoa.push([]);
       });
     });
-    const wsDetalle = XLSX.utils.aoa_to_sheet(aoa);
-    XLSX.utils.book_append_sheet(wb, wsDetalle, 'Cuotas Pendientes');
-    XLSX.writeFile(wb, 'resumen_prestamos_'+nombreBanco+'_'+fechaHoy+'.xlsx');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Cuotas');
+    rows.pop();
+    XLSX.writeFile(wb, 'resumen_prestamos_'+nombreBanco+'_'+tag+'_'+fechaHoy+'.xlsx');
   }else{
-    if(typeof window.jspdf==='undefined'){
-      appAlert('No se pudo cargar el generador de PDF (revisá tu conexión a internet).');
-      return;
-    }
+    if(typeof window.jspdf==='undefined'){ appAlert('No se pudo cargar el generador de PDF (revisá tu conexión a internet).'); return; }
     const doc = new window.jspdf.jsPDF({orientation:'landscape'});
     const pageHeight = doc.internal.pageSize.getHeight();
-    doc.setFontSize(14);
-    doc.text('Resumen de préstamos'+(bancoFiltro?' — '+bancoFiltro:''), 14, 15);
-    doc.setFontSize(9);
-    doc.text('Generado el '+formatDate(fechaHoy), 14, 21);
-    const head = [['Banco','N° Op.','Sistema','Monto Original','Tasa','Saldo Pendiente','Interés Total','Gastos','Costo Financ. Total','Cuotas','Próx. Vto.']];
-    const body = rows.map(function(r){
-      return [
-        r['Banco'], r['N° Operación'], r['Sistema'],
-        money(r['Monto Original (Gs.)']), r['Tasa Anual (%)']+'%',
-        money(r['Saldo Pendiente (Gs.)']),
-        money(r['Interés Pagado (Gs.)']+r['Interés Pendiente (Gs.)']),
-        money(r['Gastos Admin. (Gs.)']),
-        money(r['Costo Financiero Total (Gs.)']),
-        r['Cuotas Pagadas']+' pag. / '+r['Cuotas Pendientes']+' pend.',
-        r['Próximo Vencimiento']
-      ];
-    });
-    doc.autoTable({ head:head, body:body, startY:26, styles:{fontSize:8}, headStyles:{fillColor:[26,32,41]} });
-
+    doc.setFontSize(14); doc.text(titulo, 14, 15);
+    doc.setFontSize(9); doc.text('Generado el '+formatDate(fechaHoy), 14, 21);
+    doc.autoTable({ head:[['Banco','N° Op.','Sistema','Monto Original','Tasa','Cuotas','Capital período','Interés período','Gastos','Total período','Saldo Pend. total']],
+      body: rows.map(function(r){ return [r['Banco'], r['N° Operación'], r['Sistema'], money(r['Monto Original (Gs.)']), r['Tasa Anual (%)']+'%', r['Cuotas del período'],
+        money(r['Capital del período (Gs.)']), money(r['Interés del período (Gs.)']), money(r['Gastos del período (Gs.)']), money(r['Total del período (Gs.)']), money(r['Saldo Pendiente total (Gs.)'])]; }),
+      startY:26, styles:{fontSize:8}, headStyles:{fillColor:[26,32,41]} });
+    let tc=0,ti=0,tg=0; porAnio.forEach(function(r){ tc+=r.cap; ti+=r.int; tg+=r.gas; });
+    doc.autoTable({ head:[['Banco','Año','Capital','Interés','Gastos','Total']],
+      body: porAnio.map(function(r){ return [r.banco, r.anio, money(r.cap), money(r.int), money(r.gas), money(r.cap+r.int+r.gas)]; }).concat([['TOTAL','',money(tc),money(ti),money(tg),money(tc+ti+tg)]]),
+      startY: doc.lastAutoTable.finalY+8, styles:{fontSize:8}, headStyles:{fillColor:[60,70,84]} });
     doc.addPage();
     let cursorY = 18;
-    function ensureSpace(needed){
-      if(cursorY + needed > pageHeight - 12){
-        doc.addPage();
-        cursorY = 18;
-      }
-    }
+    function ensureSpace(needed){ if(cursorY + needed > pageHeight - 12){ doc.addPage(); cursorY = 18; } }
     blocks.forEach(function(b){
-      ensureSpace(12);
-      doc.setFontSize(13);
-      doc.setTextColor(20);
-      doc.text('Banco: '+b.banco, 14, cursorY);
-      cursorY += 7;
+      ensureSpace(12); doc.setFontSize(13); doc.setTextColor(20); doc.text('Banco: '+b.banco, 14, cursorY); cursorY += 7;
       b.loans.forEach(function(l){
-        ensureSpace(14);
-        doc.setFontSize(9);
-        doc.setTextColor(80);
-        doc.text('N° Operación: '+l.numeroOperacion+'   ·   Monto: '+money(l.montoOriginal)+'   ·   Tasa: '+l.tasaAnual+'%   ·   Sistema: '+l.sistema, 14, cursorY);
-        cursorY += 5;
-        const cuotaHead = [['Cuota','Vencimiento','Saldo Capital','Capital','Interés','Gastos','Total Cuota']];
-        const cuotaBody = l.cuotas.map(function(c){
-          return [c.numero, formatDate(c.fecha), money(c.saldoCapital), money(c.capital), money(c.interes), money(c.gastos), money(c.total)];
-        });
-        doc.autoTable({ head:cuotaHead, body:cuotaBody, startY:cursorY, styles:{fontSize:8}, headStyles:{fillColor:[60,70,84]}, margin:{left:14,right:14} });
+        ensureSpace(14); doc.setFontSize(9); doc.setTextColor(80);
+        doc.text('N° Operación: '+l.numeroOperacion+'   ·   Monto: '+money(l.montoOriginal)+'   ·   Tasa: '+l.tasaAnual+'%   ·   Sistema: '+l.sistema, 14, cursorY); cursorY += 5;
+        doc.autoTable({ head:[['Cuota','Vencimiento','Saldo Capital','Capital','Interés','Gastos','Total Cuota','Estado']],
+          body:l.cuotas.map(function(c){ return [c.numero, formatDate(c.fecha), money(c.saldoCapital), money(c.capital), money(c.interes), money(c.gastos), money(c.total), c.estado]; }),
+          startY:cursorY, styles:{fontSize:8}, headStyles:{fillColor:[60,70,84]}, margin:{left:14,right:14} });
         cursorY = doc.lastAutoTable.finalY + 10;
       });
     });
-
-    doc.save('resumen_prestamos_'+nombreBanco+'_'+fechaHoy+'.pdf');
+    doc.save('resumen_prestamos_'+nombreBanco+'_'+tag+'_'+fechaHoy+'.pdf');
   }
   closeResumenModal();
+}
+
+/* ---------- importar préstamos desde el Excel de bancos (una hoja por banco) ---------- */
+const APP_EMPRESA = 'dyf';
+let blRows = [];
+function triggerBankLoansImport(){ if(!needFlag('importar','importar archivos')) return; document.getElementById('bankloans-input').click(); }
+function closeBankLoans(){ document.getElementById('bl-overlay').classList.remove('open'); }
+function blIsDate(v){ return typeof v==='number' && v>36000 && v<62000; }
+function blNum(v){ return (typeof v==='number' && isFinite(v)) ? v : (parseFloat(String(v==null?'':v).replace(/[^\d.\-]/g,''))||0); }
+function blBankName(raw){
+  const t = String(raw||'').replace(/\bCIRO\b/i,'').trim().toLowerCase();
+  const map = {conti:'Continental', continental:'Continental', zetabanco:'Zetabanco', sudameris:'Sudameris', itau:'Itaú', atlas:'Atlas', gnb:'GNB', finexpar:'Finexpar'};
+  return map[t] || (t ? t.charAt(0).toUpperCase()+t.slice(1) : 'Banco');
+}
+function blParseSheet(aoa, sheetName){
+  const starts = [];
+  aoa.forEach(function(row, r){
+    for(let j=0;j<row.length;j++){
+      if(/^PRESTAMO\s*$/i.test(String(row[j]||'')) && blIsDate(row[j+1])){ starts.push({r:r, j:j}); }
+    }
+  });
+  const out = [];
+  starts.forEach(function(st, idx){
+    const row = aoa[st.r];
+    const sameRowNext = starts.filter(function(x){ return x.r===st.r && x.j>st.j; })[0];
+    const colMax = sameRowNext ? sameRowNext.j-1 : row.length+8;
+    const nextStartR = starts.filter(function(x){ return x.r>st.r && Math.abs(x.j-st.j)<=1; })[0];
+    const endR = nextStartR ? nextStartR.r : aoa.length;
+    const fechaInicio = toISODate(row[st.j+1]);
+    let vto = ''; for(let k=st.j+2;k<=st.j+5;k++){ if(blIsDate(row[k])){ vto = toISODate(row[k]); break; } }
+    // banco y N° de operación: filas de arriba
+    let banco = '', op = '', nota = '';
+    for(let rr=st.r-1; rr>=Math.max(0,st.r-2); rr--){
+      const rw = aoa[rr]||[]; let rowBanco = '', rowOp = '';
+      for(let k=Math.max(0,st.j-2); k<=Math.min(rw.length-1, st.j+7); k++){
+        const v = rw[k];
+        if(typeof v==='string' && /[A-Za-z]{3,}/.test(v)){
+          if(/^PRESTAMO\s*$/i.test(v)) continue;
+          if(/QUE ABONA/i.test(v)){ nota = v.trim(); continue; }
+          if(!rowBanco) rowBanco = v;
+        }else if(!rowOp && typeof v==='number' && v>100000 && !blIsDate(v)){ rowOp = String(Math.round(v)); }
+      }
+      if(rowBanco){ banco = rowBanco; op = rowOp; break; }
+    }
+    // encabezado de columnas
+    let hr = -1, cF=-1, cC=-1, cI=-1;
+    for(let rr=st.r+1; rr<Math.min(endR, st.r+6); rr++){
+      const rw = aoa[rr]||[];
+      for(let k=0;k<rw.length;k++){ if(/^FECHA$/i.test(String(rw[k]||'').trim()) && Math.abs(k-st.j)<=1){ hr = rr; cF = k; break; } }
+      if(hr>=0) break;
+    }
+    if(hr<0) return;
+    const hdr = aoa[hr];
+    for(let k=cF;k<hdr.length;k++){
+      const h = String(hdr[k]||'').trim().toUpperCase();
+      if(h==='CAPITAL' && cC<0) cC = k; else if(/^INTERES/.test(h) && cI<0) cI = k;
+    }
+    if(cC<0 || cI<0) return;
+    const cuotas = []; let cancelado = false;
+    for(let rr=hr+1; rr<endR; rr++){
+      const rw = aoa[rr]||[];
+      if(rw.some(function(v){ return /cancelado/i.test(String(v||'')); })) cancelado = true;
+      if(!blIsDate(rw[cF])) break;
+      const cap = blNum(rw[cC]), int = blNum(rw[cI]);
+      cuotas.push({id:uid('c'), numero:(typeof rw[cF-1]==='number'?rw[cF-1]:cuotas.length+1), fecha:toISODate(rw[cF]), capital:Math.round(cap), interes:Math.round(int), gastos:0, estado:'Pendiente'});
+    }
+    if(!cuotas.length) return;
+    for(let rr=hr+cuotas.length+1; rr<Math.min(endR, hr+cuotas.length+6); rr++){ if((aoa[rr]||[]).some(function(v){ return /cancelado/i.test(String(v||'')); })) cancelado = true; }
+    const monto = cuotas.reduce(function(a,c){ return a+c.capital; },0);
+    const interesTotal = cuotas.reduce(function(a,c){ return a+c.interes; },0);
+    // tasa estimada con la primera cuota con interés
+    let tasa = 0;
+    const c1 = cuotas.filter(function(c){ return c.interes>0; })[0];
+    if(c1 && fechaInicio && monto>0){
+      const dias = Math.round((new Date(c1.fecha+'T00:00:00')-new Date(fechaInicio+'T00:00:00'))/86400000);
+      if(dias>0) tasa = Math.round(c1.interes/monto*365/dias*1000)/10;
+    }
+    out.push({hoja:sheetName, banco: blBankName(banco || sheetName), op:op, fechaInicio:fechaInicio, vto:vto, monto:monto, tasa:tasa,
+              cuotas:cuotas, interesTotal:interesTotal, cancelado:cancelado, nota:nota});
+  });
+  return out;
+}
+function handleBankLoansFile(e){
+  const file = e.target.files[0]; e.target.value=''; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const wb = readWorkbookSmart(new Uint8Array(ev.target.result));
+      blRows = [];
+      (wb ? wb.SheetNames : []).forEach(function(n){
+        if(!wb.Sheets[n] || !wb.Sheets[n]['!ref']) return;
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, defval:'', raw:true});
+        blParseSheet(aoa, n).forEach(function(x){ blRows.push(x); });
+      });
+      if(!blRows.length){ appAlert('No encontré préstamos con el formato de tablas de pago (PRESTAMO / FECHA / CAPITAL / INTERES) en ese Excel.'); return; }
+      const hojas = Array.from(new Set(blRows.map(function(x){ return x.hoja; })));
+      blRows.forEach(function(x){
+        const esCiro = /ciro/i.test(x.hoja);
+        const hermanaCiro = hojas.some(function(h){ return /ciro/i.test(h) && h.replace(/\s*ciro\s*/i,'').trim().toLowerCase()===x.hoja.trim().toLowerCase(); });
+        x.inc = APP_EMPRESA==='ciro' ? !hermanaCiro : !esCiro;
+        x.dup = loans.some(function(l){ return l.banco===x.banco && Math.round(l.montoOriginal||0)===Math.round(x.monto) && l.fechaInicio===x.fechaInicio; });
+        if(x.dup) x.inc = false;
+      });
+      document.getElementById('bl-sub').textContent = 'Se encontraron '+blRows.length+' préstamos en '+hojas.length+' hojas. Marcá los que son de '+(APP_EMPRESA==='ciro'?'Ciro Group':'DYF Group')+'. Los ya cargados aparecen desmarcados.';
+      blRender(); document.getElementById('bl-overlay').classList.add('open');
+    }catch(err){ appAlert('No pude leer el Excel: '+err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function blRender(){
+  document.getElementById('bl-list').innerHTML = '<table class="ltable"><tr><th></th><th>Hoja</th><th>Banco</th><th>N° operación</th><th class="mono">Desembolso</th><th class="mono">Vence</th><th class="mono">Capital</th><th class="mono">Interés</th><th>Cuotas</th><th>Estado</th></tr>' +
+    blRows.map(function(x,i){
+      return '<tr><td><input type="checkbox" class="bl-ck" value="'+i+'" '+(x.inc?'checked':'')+' onchange="blSum()"></td><td>'+escapeHtml(x.hoja)+'</td><td>'+escapeHtml(x.banco)+'</td><td>'+escapeHtml(x.op||'s/n')+(x.nota?' <span class="badge badge-warn">'+escapeHtml(x.nota)+'</span>':'')+'</td>' +
+        '<td class="mono">'+(x.fechaInicio?formatDate(x.fechaInicio):'—')+'</td><td class="mono">'+(x.vto?formatDate(x.vto):'—')+'</td><td class="mono">'+money(x.monto)+'</td><td class="mono">'+money(x.interesTotal)+'</td><td>'+x.cuotas.length+'</td>' +
+        '<td>'+(x.dup?'<span class="badge badge-warn">ya cargado</span>':(x.cancelado?'cancelado':'—'))+'</td></tr>'; }).join('') + '</table>';
+  blSum();
+}
+function blSum(){
+  let n=0,t=0; document.querySelectorAll('.bl-ck:checked').forEach(function(c){ const x = blRows[+c.value]; n++; t+=x.monto; });
+  document.getElementById('bl-sum').textContent = n+' préstamo(s) seleccionado(s) · capital total '+money(t);
+}
+function confirmBankLoans(){
+  const marcarPasadas = document.getElementById('bl-past').checked, hoy = todayISOStr(); let n=0;
+  document.querySelectorAll('.bl-ck:checked').forEach(function(c){
+    const x = blRows[+c.value];
+    const cuotas = x.cuotas.map(function(q){ return Object.assign({}, q, {id:uid('c'), estado: (x.cancelado || (marcarPasadas && q.fecha<hoy)) ? 'Pagada' : 'Pendiente'}); });
+    loans.push({id:uid('l'), banco:x.banco, numeroOperacion:x.op||'', tipoCuota:'Variable', montoOriginal:x.monto, tasaAnual:x.tasa, fechaInicio:x.fechaInicio,
+      plazoMeses:null, graciaMeses:null, frecuenciaCapital:null,
+      notas:'Importado de Excel de bancos (hoja '+x.hoja+'). Tasa estimada con la primera cuota.'+(x.nota?' '+x.nota+'.':''), cuotas:cuotas});
+    n++;
+  });
+  if(!n){ appAlert('Marcá al menos un préstamo.'); return; }
+  persist(); closeBankLoans(); renderAll();
+  appAlert(n+' préstamo(s) importado(s). Ya podés elegir bancos y años en "Descargar resumen".');
 }
 let showArchivedLoans = false;
 function toggleArchivedLoans(){

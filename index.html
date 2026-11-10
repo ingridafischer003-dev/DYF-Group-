@@ -1071,6 +1071,23 @@
   </div>
 </div>
 
+<div class="overlay" id="cp-overlay">
+  <div class="modal" style="max-width:1100px;">
+    <h3>Importar compromisos de pago</h3>
+    <p class="modal-sub" id="cp-sub"></p>
+    <div class="field-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+      <div class="field"><label>Cargar desde la fecha</label><input type="date" id="cp-desde" onchange="cpResetInc()"></div>
+      <div class="field"><label>&nbsp;</label><label style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="checkbox" id="cp-prest" onchange="cpResetInc()"> Incluir cuotas de préstamos (ya están en Finanzas)</label></div>
+    </div>
+    <div id="cp-list" style="max-height:420px;overflow:auto;margin-top:10px;"></div>
+    <div id="cp-sum" class="modal-sub" style="margin-top:8px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeCompromisos()">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmCompromisos()">Importar seleccionados</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="bl-overlay">
   <div class="modal" style="max-width:980px;">
     <h3>Importar préstamos de bancos</h3>
@@ -2283,6 +2300,14 @@ function handleSmartExcelSelect(e){
         appAlert('El archivo no tiene ninguna hoja legible. Verificá que sea un Excel válido.');
         return;
       }
+      // calendario de compromisos (Banco · Ch nro · Fecha de pago · Orden · Monto)
+      let cpRes = null;
+      validSheetNames.some(function(n){
+        const aoa = XLSX.utils.sheet_to_json(smartWorkbook.Sheets[n], {header:1, defval:'', raw:true});
+        const det = cpDetect(aoa); if(!det) return false;
+        const rows = cpParse(aoa, det); if(rows.length){ cpRes = rows; return true; } return false;
+      });
+      if(cpRes){ cpOpen(cpRes); return; }
       // si el archivo es un estado de cuenta con "Cheque 1, Cheque 2…" y "Total", se abre el importador de plan de cheques
       let planRes = null;
       validSheetNames.some(function(n){
@@ -3036,6 +3061,123 @@ function descargarResumen(){
   closeResumenModal();
 }
 
+/* ---------- importar "Compromisos" (calendario: Banco · Ch nro · Fecha de pago · Orden · Monto) ---------- */
+let cpRows = [];
+function cpNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+function cpDetect(aoa){
+  for(let r=0; r<Math.min(6, aoa.length); r++){
+    const h = (aoa[r]||[]).map(cpNorm); const c = {};
+    h.forEach(function(v,i){
+      if(/^banco$/.test(v)) c.banco = i;
+      else if(/^(ch\.?\s*nro|nro\.?\s*ch|n[o°]?\s*cheque|cheque)$/.test(v)) c.ch = i;
+      else if(/^fecha( de pago)?$/.test(v) && c.fecha==null) c.fecha = i;
+      else if(/^(orden|concepto|detalle)$/.test(v)) c.orden = i;
+      else if(/^monto|^importe/.test(v)) c.monto = i;
+    });
+    if(c.fecha!=null && c.orden!=null && c.monto!=null && c.banco!=null) return {hdr:r, c:c};
+  }
+  return null;
+}
+function cpBanco(b){
+  const t = cpNorm(b); if(!t) return '';
+  const map = {'sudameris':'Sudameris','itau':'Itaú','zeta banco':'Zetabanco','zetabanco':'Zetabanco','atlas':'Atlas','gnb':'GNB','continental':'Continental','coop del sur':'Coop. del Sur','familiar':'Familiar','finexpar':'Finexpar'};
+  return map[t] || (String(b).trim().charAt(0).toUpperCase()+String(b).trim().slice(1).toLowerCase());
+}
+function cpKey(n){ return cpNorm(n).replace(/\bs\.?\s?r\.?\s?l\.?\b|\bs\.?\s?a\.?\b|\bicsa\b|[^a-z0-9]/g,''); }
+function cpClassify(orden){
+  const t = cpNorm(orden);
+  if(!t) return {tipo:'Revisar', entidad:'', nota:'Sin concepto'};
+  if(/\bprestamos?\b|\bcuota\b/.test(t)) return {tipo:'Prestamo', entidad:orden.trim()};
+  if(/salario|sueldo|quincena|aguinal|aguinado/.test(t)) return {tipo:'Otro', entidad:'Funcionarios'};
+  if(/cubre|schapoval|nabax|d\.?\s?g\.?\s+distrib|descuento rb/.test(t)){
+    let e = orden.trim().split(/\s+-\s+|\s*-\s*cubre/i)[0].replace(/^cheque\s+/i,'').replace(/^\([^)]*\)\s*/,'').trim();
+    if(/schapoval/i.test(e)) e = 'Schapovaloff S.R.L.';
+    return {tipo:'ChequeGrupo', entidad:e || orden.trim()};
+  }
+  const m = orden.trim().split(/\s+(?:Fact|Fat|Facturas?|NC|Cambio)\b/i);
+  return {tipo:'Cheque', entidad:(m[0]||orden).replace(/[\s\-–]+$/,'').trim()};
+}
+function cpParse(aoa, det){
+  const c = det.c, out = [];
+  const existentes = {}; pagos.forEach(function(p){ if(p.entidad) existentes[cpKey(p.entidad)] = existentes[cpKey(p.entidad)] || p.entidad; });
+  const vistos = {};
+  for(let r=det.hdr+1; r<aoa.length; r++){
+    const row = aoa[r]||[]; const f = row[c.fecha], m = blNum(row[c.monto]);
+    if(!(typeof f==='number' && f>40000 && f<60000) || !(m>0)) continue;     // sin fecha válida o sin monto
+    const orden = String(row[c.orden]==null?'':row[c.orden]).replace(/\s+/g,' ').trim();
+    const k = classifyKey(orden);
+    const cl = cpClassify(orden);
+    let ent = cl.entidad; const ck = cpKey(ent);
+    if(ck){
+      let hit = existentes[ck] || vistos[ck];
+      if(!hit && ck.length>=6){   // errores de tipeo de una letra (Areagua / Aregua)
+        const todos = Object.keys(existentes).concat(Object.keys(vistos));
+        for(let q=0;q<todos.length;q++){ if(cpLev1(ck, todos[q])){ hit = existentes[todos[q]] || vistos[todos[q]]; break; } }
+      }
+      ent = hit || ent; vistos[ck] = ent;
+    }
+    const ch = c.ch!=null ? String(row[c.ch]==null?'':row[c.ch]).replace(/\.0+$/,'').trim() : '';
+    out.push({fila:r+1, fecha:toISODate(f), banco:cpBanco(row[c.banco]), ch:ch, orden:orden, monto:Math.round(m), tipo:cl.tipo, entidad:ent, inc:true});
+  }
+  return out;
+}
+function cpLev1(a,b){
+  if(a===b) return true; if(Math.abs(a.length-b.length)>1) return false;
+  let i=0; while(i<a.length && i<b.length && a[i]===b[i]) i++;
+  if(a.length===b.length) return a.slice(i+1)===b.slice(i+1);
+  return a.length>b.length ? a.slice(i+1)===b.slice(i) : b.slice(i+1)===a.slice(i);
+}
+function classifyKey(s){ return s; }
+function cpResetInc(){
+  const desde = document.getElementById('cp-desde').value, prest = document.getElementById('cp-prest').checked;
+  cpRows.forEach(function(x){ x.inc = (!desde || x.fecha>=desde) && (x.tipo!=='Prestamo' || prest) && x.tipo!=='Revisar'; });
+  cpRender();
+}
+function closeCompromisos(){ document.getElementById('cp-overlay').classList.remove('open'); }
+function cpOpen(rows){
+  cpRows = rows;
+  document.getElementById('cp-desde').value = todayISOStr();
+  document.getElementById('cp-prest').checked = false;
+  const aF = rows.filter(function(x){ return x.fecha>=todayISOStr(); }).length;
+  document.getElementById('cp-sub').textContent = 'Se leyeron '+rows.length+' compromisos con fecha y monto; '+aF+' son de hoy en adelante. Revisá el tipo y el proveedor de cada uno: los cheques a empresas del grupo ("Cubre Ciro", "Cubre Nabax", etc.) se detectan solos.';
+  cpResetInc();
+  document.getElementById('cp-overlay').classList.add('open');
+}
+function cpRender(){
+  const shown = cpRows.map(function(x,i){ return {x:x,i:i}; }).filter(function(o){ const d = document.getElementById('cp-desde').value; return !d || o.x.fecha>=d; });
+  const opt = function(v,cur,l){ return '<option value="'+v+'"'+(cur===v?' selected':'')+'>'+l+'</option>'; };
+  document.getElementById('cp-list').innerHTML = shown.length ? '<table class="ltable"><tr><th></th><th class="mono">Fecha</th><th>Banco</th><th>Cheque</th><th>Concepto (del Excel)</th><th>Proveedor / empresa</th><th>Tipo</th><th class="mono">Monto</th></tr>' +
+    shown.map(function(o){ const x = o.x;
+      return '<tr><td><input type="checkbox" class="cp-ck" value="'+o.i+'" '+(x.inc?'checked':'')+' onchange="cpSum()"></td><td class="mono">'+formatDate(x.fecha)+'</td><td>'+escapeHtml(x.banco)+'</td><td class="mono">'+escapeHtml(x.ch)+'</td><td style="max-width:260px;">'+escapeHtml(x.orden||'(sin concepto)')+'</td>' +
+        '<td><input type="text" value="'+escapeHtml(x.entidad)+'" style="width:190px;" onchange="cpRows['+o.i+'].entidad=this.value"></td>' +
+        '<td><select onchange="cpRows['+o.i+'].tipo=this.value;cpSum()">'+opt('Cheque',x.tipo,'Cheque a proveedor')+opt('ChequeGrupo',x.tipo,'Empresa del grupo')+opt('Otro',x.tipo,'Otro pago')+opt('Prestamo',x.tipo,'Préstamo (no importar)')+opt('Revisar',x.tipo,'Revisar (no importar)')+'</select></td>' +
+        '<td class="mono">'+money(x.monto)+'</td></tr>'; }).join('') + '</table>' : '<div class="empty" style="padding:14px;">No hay compromisos desde esa fecha.</div>';
+  cpSum();
+}
+function cpSum(){
+  const t = {Cheque:[0,0], ChequeGrupo:[0,0], Otro:[0,0]};
+  document.querySelectorAll('.cp-ck:checked').forEach(function(c){ const x = cpRows[+c.value]; if(t[x.tipo]){ t[x.tipo][0]++; t[x.tipo][1]+=x.monto; } });
+  document.getElementById('cp-sum').textContent = 'Seleccionados → proveedores: '+t.Cheque[0]+' ('+money(t.Cheque[1])+') · empresas del grupo: '+t.ChequeGrupo[0]+' ('+money(t.ChequeGrupo[1])+') · otros: '+t.Otro[0]+' ('+money(t.Otro[1])+')';
+}
+function confirmCompromisos(){
+  const existing = {}; pagos.forEach(function(p){ existing[pagoDedupeKey(p)] = true; });
+  let n=0, dup=0, omit=0;
+  document.querySelectorAll('.cp-ck:checked').forEach(function(c){
+    const x = cpRows[+c.value];
+    if(x.tipo!=='Cheque' && x.tipo!=='ChequeGrupo' && x.tipo!=='Otro'){ omit++; return; }
+    const partes = [];
+    if(x.banco) partes.push('Banco: '+x.banco);
+    if(x.ch) partes.push('Cheque N° '+x.ch);
+    if(x.orden) partes.push(x.orden);
+    const p = {id:uid('p'), tipo:x.tipo, entidad:(x.entidad||x.orden||'Sin nombre').trim(), concepto:partes.join(' · '), monto:x.monto, fecha:x.fecha, estado:'Pendiente', marca:''};
+    const k = pagoDedupeKey(p);
+    if(existing[k]){ dup++; return; }
+    existing[k] = true; pagos.push(p); n++;
+  });
+  if(!n && !dup){ appAlert('Marcá al menos un compromiso con tipo cheque, empresa del grupo u otro pago.'); return; }
+  persistPagos(); closeCompromisos(); renderAll();
+  appAlert(n+' pago(s) agregado(s) a la planilla de pagos.'+(dup?'\n'+dup+' ya estaban cargados y se saltearon.':'')+(omit?'\n'+omit+' fila(s) con tipo "no importar" se dejaron afuera.':''));
+}
 /* ---------- importar préstamos desde el Excel de bancos (una hoja por banco) ---------- */
 const APP_EMPRESA = 'dyf';
 let blRows = [];

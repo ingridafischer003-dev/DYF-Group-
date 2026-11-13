@@ -250,6 +250,14 @@
   .calc-fab:hover{filter:brightness(1.08);}
   .calc-panel{position:fixed;right:18px;bottom:80px;z-index:901;width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 100px);overflow:auto;background:var(--ink-900);border:1px solid var(--ink-700);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.45);display:none;padding:12px 14px 14px;}
   .calc-panel.open{display:block;}
+  .calc-head{cursor:grab;user-select:none;touch-action:none;}
+  .calc-head.drag{cursor:grabbing;}
+  .calc-head .calc-bt{display:flex;gap:4px;}
+  .calc-panel.min{width:230px;padding:8px 12px;overflow:hidden;}
+  .calc-panel.min .calc-tabs,.calc-panel.min #calc-c .calc-in,.calc-panel.min .calc-keys,.calc-panel.min .calc-hist,.calc-panel.min #calc-s{display:none !important;}
+  .calc-panel.min .calc-head{margin-bottom:2px;}
+  .calc-panel.min .calc-res{font-size:19px;margin:2px 2px 0;min-height:24px;}
+  .calc-panel.moved{right:auto;bottom:auto;}
   .calc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
   .calc-title{font-family:'Fraunces',serif;font-weight:600;font-size:16px;}
   .calc-tabs{display:flex;gap:6px;margin-bottom:10px;}
@@ -315,7 +323,7 @@
 <body>
 <button class="calc-fab" id="calc-fab" title="Calculadora" onclick="toggleCalc()">🧮</button>
 <div class="calc-panel" id="calc-panel">
-  <div class="calc-head"><span class="calc-title">Calculadora</span><button class="btn-ghost btn-small" onclick="toggleCalc()">✕</button></div>
+  <div class="calc-head" title="Arrastrá para mover"><span class="calc-title">🧮 Calculadora</span><span class="calc-bt"><button class="btn-ghost btn-small" id="calc-min-btn" onclick="calcToggleMin()" title="Minimizar">—</button><button class="btn-ghost btn-small" onclick="toggleCalc()" title="Cerrar">✕</button></span></div>
   <div class="calc-tabs"><button id="calc-tab-c" class="on" onclick="calcTab('c')">Calculadora</button><button id="calc-tab-s" onclick="calcTab('s')">Sumas y resto</button></div>
   <div id="calc-c">
     <input class="calc-in" id="calc-expr" placeholder="Ej: 5.000.000 + 3.200.000 - 10%" autocomplete="off" oninput="calcLive()" onkeydown="if(event.key==='Enter'){calcEq();event.preventDefault();}">
@@ -374,6 +382,7 @@
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
     <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA: Excel o PDF)</button>
     <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
+    <button class="btn-primary btn-small" data-mut onclick="openFijos()">📌 Pagos fijos</button>
     <button class="btn-primary btn-small" data-mut onclick="openCanje()">🔁 Marcar cheques en canje</button>
     <button class="btn-primary btn-small" data-exp onclick="openEcExport()">📤 Descargar estado de cuenta por marca</button>
     <input type="file" id="plan-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handlePlanFile(event)">
@@ -1071,6 +1080,38 @@
   </div>
 </div>
 
+<div class="overlay" id="fj-overlay">
+  <div class="modal" style="max-width:900px;">
+    <h3>📌 Pagos fijos</h3>
+    <p class="modal-sub">Pagos que se repiten (quincena, fin de mes, flete, luz, agua…). Se cargan solos en la planilla de pagos y en el flujo de caja de los próximos meses; después podés cambiar el monto de cada mes (por ejemplo luz o agua).</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;" id="fj-presets"></div>
+    <div class="field-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;">
+      <div class="field"><label>Pago a</label><input type="text" id="fj-entidad" placeholder="Ej: Funcionarios, ANDE"></div>
+      <div class="field"><label>Concepto</label><input type="text" id="fj-concepto" placeholder="Ej: Quincena, Luz"></div>
+      <div class="field"><label>Monto (Gs.)</label><input type="text" id="fj-monto" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>Cuándo se paga</label>
+        <select id="fj-regla" onchange="fjReglaChange()">
+          <option value="quincena">Quincena (día 15)</option>
+          <option value="finmes">Fin de mes (último día)</option>
+          <option value="dia">Un día fijo del mes</option>
+          <option value="semana">Cada semana</option>
+        </select></div>
+      <div class="field" id="fj-dia-wrap" style="display:none;"><label id="fj-dia-lbl">Día del mes</label><input type="number" id="fj-dia" min="1" max="31" value="10"></div>
+      <div class="field" id="fj-sem-wrap" style="display:none;"><label>Día de la semana</label>
+        <select id="fj-sem"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5" selected>Viernes</option></select></div>
+      <div class="field"><label>&nbsp;</label><button type="button" class="btn-primary" onclick="fjAdd()" id="fj-add-btn">Agregar</button></div>
+    </div>
+    <div id="fj-list" style="margin-top:12px;max-height:300px;overflow:auto;"></div>
+    <div class="modal-actions spread">
+      <span class="modal-sub" id="fj-info" style="margin:0;"></span>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn-ghost" onclick="closeFijos()">Cerrar</button>
+        <button type="button" class="btn-primary" onclick="fjGenerarClick()">Cargar los próximos 3 meses</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="cp-overlay">
   <div class="modal" style="max-width:1100px;">
     <h3>Importar compromisos de pago</h3>
@@ -1418,6 +1459,7 @@
 const STORAGE_KEY = 'dyf-loans-v2';
 const INCOME_KEY = 'dyf-incomes-v1';
 const PAGOS_KEY = 'dyf-pagos-v1';
+const FIJOS_KEY = PAGOS_KEY.replace('pagos','fijos');
 const BACKUP_DATE_KEY = 'dyf-lastbackup-v1';
 const COBRANZAS_KEY = 'dyf-cobranzas-v1';
 const COBPARAMS_KEY = 'dyf-cobparams-v1';
@@ -1438,6 +1480,7 @@ const DEFAULT_SUPS = ['Alfredo Gonzalez','Cristian Acevedo','Daisy Irala'];
 let cobConfig = {sups:DEFAULT_SUPS.slice(), asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
 let inventarios = [];
 const INV_MARCAS_DEF = ['Nestlé','Roger','Módiga','MG','Vertex','D&F','Alamo'];
+let fijos = [];
 let invConfig = {meta:80, positivo:'total', ignorarCero:false, marcas:INV_MARCAS_DEF.slice()};
 function normalizeCobConfig(o){
   const c = {sups:[], asg:{}, excl:{}, names:{}, cliExcl:{}, link:true, repHasta:''};
@@ -1534,12 +1577,14 @@ function loadLoans(){
   }catch(e){ cobConfig = normalizeCobConfig(null); }
   try{ const rawInv = localStorage.getItem(INV_KEY); inventarios = rawInv ? JSON.parse(rawInv) : []; if(!Array.isArray(inventarios)) inventarios = []; }catch(e){ inventarios = []; }
   try{ const rawIc = localStorage.getItem(INVCFG_KEY); invConfig = normalizeInvConfig(rawIc ? JSON.parse(rawIc) : null); }catch(e){ invConfig = normalizeInvConfig(null); }
+  try{ const rawFj = localStorage.getItem(FIJOS_KEY); fijos = rawFj ? JSON.parse(rawFj) : []; if(!Array.isArray(fijos)) fijos = []; }catch(e){ fijos = []; }
   if(repairDuplicateCuotaIds()) persist();
   if(repairDuplicatePagoIds()) persistPagos();
   bootAuth();
 }
 function enterApp(){
   calcShowFab();
+  setTimeout(fijosAutoGenerar, 400);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   const hashSec = (location.hash||'').replace('#','');
@@ -1610,6 +1655,7 @@ async function initSyncFromSavedConfig(){
       if(remote.cobConfig && typeof remote.cobConfig==='object'){ cobConfig = normalizeCobConfig(remote.cobConfig); try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }catch(e){} }
       applyRemoteUsers(remote);
       if(Array.isArray(remote.inventarios)){ inventarios = remote.inventarios; try{ localStorage.setItem(INV_KEY, JSON.stringify(inventarios)); }catch(e){} }
+      if(Array.isArray(remote.fijos)){ fijos = remote.fijos; try{ localStorage.setItem(FIJOS_KEY, JSON.stringify(fijos)); }catch(e){} }
       if(remote.invConfig && typeof remote.invConfig==='object'){ invConfig = normalizeInvConfig(remote.invConfig); try{ localStorage.setItem(INVCFG_KEY, JSON.stringify(invConfig)); }catch(e){} }
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
       try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
@@ -1626,7 +1672,7 @@ async function initSyncFromSavedConfig(){
   }
 }
 async function buildPushPayload(){
-  const local = { loans: loans, incomes: incomes, pagos: pagos, cobranzas: cobranzas, cobConfig: cobConfig, inventarios: inventarios, invConfig: invConfig };
+  const local = { loans: loans, incomes: incomes, pagos: pagos, cobranzas: cobranzas, cobConfig: cobConfig, inventarios: inventarios, invConfig: invConfig, fijos: fijos };
   const remote = await pullFromSupabase();
   if(remote===false) return null;   // no se pudo leer la nube: no pisar nada
   if(appUsers.length===0){
@@ -1688,6 +1734,7 @@ function subscribeRealtime(){
         if(payload.new.data.cobConfig && typeof payload.new.data.cobConfig==='object'){ cobConfig = normalizeCobConfig(payload.new.data.cobConfig); try{ localStorage.setItem(COBCONFIG_KEY, JSON.stringify(cobConfig)); }catch(e){} }
         applyRemoteUsers(payload.new.data);
         if(Array.isArray(payload.new.data.inventarios)){ inventarios = payload.new.data.inventarios; try{ localStorage.setItem(INV_KEY, JSON.stringify(inventarios)); }catch(e){} }
+        if(Array.isArray(payload.new.data.fijos)){ fijos = payload.new.data.fijos; try{ localStorage.setItem(FIJOS_KEY, JSON.stringify(fijos)); }catch(e){} }
         if(payload.new.data.invConfig && typeof payload.new.data.invConfig==='object'){ invConfig = normalizeInvConfig(payload.new.data.invConfig); try{ localStorage.setItem(INVCFG_KEY, JSON.stringify(invConfig)); }catch(e){} }
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }catch(e){}
         try{ localStorage.setItem(INCOME_KEY, JSON.stringify(incomes)); }catch(e){}
@@ -1801,7 +1848,7 @@ function persist(){
   pushToSupabase();
 }
 function exportBackup(){
-  const payload = {loans:loans, incomes:incomes, pagos:pagos, cobranzas:cobranzas, cobConfig:cobConfig, inventarios:inventarios, invConfig:invConfig};
+  const payload = {loans:loans, incomes:incomes, pagos:pagos, cobranzas:cobranzas, cobConfig:cobConfig, inventarios:inventarios, invConfig:invConfig, fijos:fijos};
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1824,7 +1871,7 @@ function importBackup(e){
   reader.onload = function(ev){
     try{
       const data = JSON.parse(ev.target.result);
-      let newLoans, newIncomes, newPagos, newCobranzas = null, newCobConfig = null, newInv = null, newInvCfg = null;
+      let newLoans, newIncomes, newPagos, newCobranzas = null, newCobConfig = null, newInv = null, newInvCfg = null, newFijos = null;
       if(Array.isArray(data)){
         // formato viejo: solo el array de préstamos
         newLoans = data; newIncomes = {}; newPagos = [];
@@ -1834,6 +1881,7 @@ function importBackup(e){
         if(data.cobConfig && typeof data.cobConfig==='object') newCobConfig = data.cobConfig;
         if(Array.isArray(data.inventarios)) newInv = data.inventarios;
         if(data.invConfig && typeof data.invConfig==='object') newInvCfg = data.invConfig;
+        if(Array.isArray(data.fijos)) newFijos = data.fijos;
       }else{
         throw new Error('Formato inválido');
       }
@@ -1843,6 +1891,7 @@ function importBackup(e){
         if(newCobConfig) cobConfig = normalizeCobConfig(newCobConfig);
         if(newInv) inventarios = newInv;
         if(newInvCfg) invConfig = normalizeInvConfig(newInvCfg);
+        if(newFijos){ fijos = newFijos; persistFijos(); }
         persist(); persistInv(); persistInvConfig(); persistIncomes(); persistPagos(); persistCobranzas(); persistCobConfig();
         renderAll();
         appAlert('Copia de seguridad importada correctamente.');
@@ -2730,7 +2779,7 @@ function allObligaciones(){
       entidad:p.entidad, detalle:p.concepto || '—',
       monto:p.monto, capital:p.monto, interes:0,
       fecha:p.fecha, fechaEfectiva: nextBusinessDay(p.fecha), d:daysUntil(p.fecha),
-      pagoId:p.id, canje:!!p.canje
+      pagoId:p.id, canje:!!p.canje, fijo:!!p.fijoId
     });
   });
   return items;
@@ -3061,6 +3110,154 @@ function descargarResumen(){
   closeResumenModal();
 }
 
+/* ---------- pagos fijos (quincena, fin de mes, flete, luz, agua…) ---------- */
+let fjEditId = null;
+const FJ_PRESETS = [
+  {l:'Quincena funcionarios', e:'Funcionarios', c:'Quincena', r:'quincena'},
+  {l:'Sueldo fin de mes', e:'Funcionarios', c:'Sueldo fin de mes', r:'finmes'},
+  {l:'Flete (semanal)', e:'Flete', c:'Pago de flete', r:'semana', s:5},
+  {l:'Luz (ANDE)', e:'ANDE', c:'Luz', r:'dia', d:10},
+  {l:'Agua (ESSAP)', e:'ESSAP', c:'Agua', r:'dia', d:10},
+  {l:'Internet / teléfono', e:'Internet y teléfono', c:'Servicio mensual', r:'dia', d:5},
+  {l:'Alquiler', e:'Alquiler', c:'Alquiler', r:'dia', d:5}
+];
+function persistFijos(){
+  if(!canEditKey('fijos')) return denyEdit();
+  try{ localStorage.setItem(FIJOS_KEY, JSON.stringify(fijos)); }catch(e){ console.error('No se pudo guardar pagos fijos', e); }
+  pushToSupabase();
+}
+function fjIso(y,m,d){ return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function fjLastDay(y,m){ return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+function fjAddDays(iso,n){ const d = new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function fjReglaTexto(f){
+  if(f.regla==='quincena') return 'Quincena (día 15)';
+  if(f.regla==='finmes') return 'Fin de mes';
+  if(f.regla==='dia') return 'Día '+f.dia+' de cada mes';
+  return 'Cada '+['','lunes','martes','miércoles','jueves','viernes'][f.dia||5];
+}
+/* fechas de un pago fijo entre dos fechas (ISO, ambas incluidas) */
+function fjFechas(f, desde, hasta){
+  const out = [];
+  if(f.regla==='semana'){
+    let d = desde; const wd = f.dia||5;
+    for(let i=0;i<400 && d<=hasta;i++){ const w = new Date(d+'T00:00:00Z').getUTCDay(); if(w===wd) out.push(d); d = fjAddDays(d,1); }
+    return out;
+  }
+  let y = +desde.slice(0,4), m = +desde.slice(5,7);
+  for(let i=0;i<60;i++){
+    const ult = fjLastDay(y,m);
+    const dia = f.regla==='quincena' ? 15 : (f.regla==='finmes' ? ult : Math.min(f.dia||1, ult));
+    const iso = fjIso(y,m,dia);
+    if(iso>hasta) break;
+    if(iso>=desde) out.push(iso);
+    m++; if(m>12){ m = 1; y++; }
+  }
+  return out;
+}
+function fjConceptoFecha(f, iso){
+  if(f.regla==='semana') return f.concepto+' · semana del '+formatDate(iso);
+  return f.concepto+' '+MESES_ES[+iso.slice(5,7)-1]+' '+iso.slice(0,4);
+}
+function fjFinMes(offset){
+  const t = todayISOStr(); let y = +t.slice(0,4), m = +t.slice(5,7)+offset;
+  while(m>12){ m-=12; y++; }
+  return fjIso(y,m,fjLastDay(y,m));
+}
+/* crea los pagos pendientes de todos los fijos activos hasta la fecha 'hasta'; no repite los ya cargados */
+function fijosGenerar(hasta){
+  const hoy = todayISOStr(); const existentes = {}; let n = 0, cambio = false;
+  pagos.forEach(function(p){ if(p.fijoId) existentes[p.fijoId+'|'+p.fecha] = true; });
+  fijos.forEach(function(f){
+    if(f.activo===false) return;
+    const desde = f.genHasta && f.genHasta>=hoy ? fjAddDays(f.genHasta,1) : hoy;
+    if(desde>hasta){ return; }
+    fjFechas(f, desde, hasta).forEach(function(iso){
+      if(existentes[f.id+'|'+iso]) return;
+      existentes[f.id+'|'+iso] = true;
+      pagos.push({id:uid('p'), tipo:'Otro', entidad:f.entidad, concepto:fjConceptoFecha(f, iso), monto:f.monto, fecha:iso, estado:'Pendiente', marca:'', fijoId:f.id});
+      n++;
+    });
+    f.genHasta = hasta; cambio = true;
+  });
+  if(n){ persistPagos(); }
+  if(cambio){ persistFijos(); }
+  return n;
+}
+function fijosAutoGenerar(){
+  try{
+    if(!fijos.length || !canEditKey('pagos') || !canEditKey('fijos')) return;
+    if(fijosGenerar(fjFinMes(1))) renderAll();
+  }catch(e){ console.error(e); }
+}
+function openFijos(){
+  if(!canEditKey('fijos')) return denyEdit();
+  document.getElementById('fj-presets').innerHTML = FJ_PRESETS.map(function(p,i){ return '<button type="button" class="btn-ghost btn-small" onclick="fjPreset('+i+')">+ '+escapeHtml(p.l)+'</button>'; }).join('');
+  fjEditId = null; fjClearForm();
+  document.getElementById('fj-overlay').classList.add('open');
+  fjRender();
+}
+function closeFijos(){ document.getElementById('fj-overlay').classList.remove('open'); }
+function fjReglaChange(){
+  const r = document.getElementById('fj-regla').value;
+  document.getElementById('fj-dia-wrap').style.display = r==='dia' ? 'block' : 'none';
+  document.getElementById('fj-sem-wrap').style.display = r==='semana' ? 'block' : 'none';
+}
+function fjClearForm(){
+  ['fj-entidad','fj-concepto','fj-monto'].forEach(function(i){ document.getElementById(i).value = ''; });
+  document.getElementById('fj-regla').value = 'quincena'; document.getElementById('fj-dia').value = 10; document.getElementById('fj-sem').value = 5;
+  document.getElementById('fj-add-btn').textContent = 'Agregar'; fjReglaChange();
+}
+function fjPreset(i){
+  const p = FJ_PRESETS[i]; fjEditId = null;
+  document.getElementById('fj-entidad').value = p.e; document.getElementById('fj-concepto').value = p.c;
+  document.getElementById('fj-regla').value = p.r; if(p.d) document.getElementById('fj-dia').value = p.d; if(p.s) document.getElementById('fj-sem').value = p.s;
+  document.getElementById('fj-add-btn').textContent = 'Agregar'; fjReglaChange();
+  document.getElementById('fj-monto').focus();
+}
+function fjAdd(){
+  const entidad = document.getElementById('fj-entidad').value.trim(), concepto = document.getElementById('fj-concepto').value.trim();
+  const monto = Math.round(cleanNumber(document.getElementById('fj-monto').value)), regla = document.getElementById('fj-regla').value;
+  if(!entidad || !concepto){ appAlert('Completá a quién se paga y el concepto.'); return; }
+  if(!(monto>0)){ appAlert('Indicá el monto (si varía, poné un estimado: después lo cambiás cada mes).'); return; }
+  let dia = 0;
+  if(regla==='dia') dia = Math.min(31, Math.max(1, parseInt(document.getElementById('fj-dia').value,10)||1));
+  if(regla==='semana') dia = parseInt(document.getElementById('fj-sem').value,10)||5;
+  if(fjEditId){
+    const f = fijos.find(function(x){ return x.id===fjEditId; });
+    if(f){ f.entidad = entidad; f.concepto = concepto; f.monto = monto; f.regla = regla; f.dia = dia; }
+  }else{
+    fijos.push({id:uid('fj'), entidad:entidad, concepto:concepto, monto:monto, regla:regla, dia:dia, activo:true, genHasta:''});
+  }
+  fjEditId = null; persistFijos(); fjClearForm(); fjRender();
+}
+function fjEdit(id){
+  const f = fijos.find(function(x){ return x.id===id; }); if(!f) return; fjEditId = id;
+  document.getElementById('fj-entidad').value = f.entidad; document.getElementById('fj-concepto').value = f.concepto; document.getElementById('fj-monto').value = f.monto;
+  document.getElementById('fj-regla').value = f.regla; if(f.regla==='dia') document.getElementById('fj-dia').value = f.dia; if(f.regla==='semana') document.getElementById('fj-sem').value = f.dia;
+  document.getElementById('fj-add-btn').textContent = 'Guardar cambios'; fjReglaChange();
+}
+function fjToggle(id){ const f = fijos.find(function(x){ return x.id===id; }); if(f){ f.activo = f.activo===false; persistFijos(); fjRender(); } }
+function fjDel(id){
+  appConfirm('¿Quitar este pago fijo? Los pagos que ya se cargaron en la planilla se mantienen.', function(){
+    fijos = fijos.filter(function(x){ return x.id!==id; }); persistFijos(); fjRender();
+  });
+}
+function fjRender(){
+  const box = document.getElementById('fj-list');
+  if(!fijos.length){ box.innerHTML = '<div class="empty" style="padding:14px;"><b>Todavía no hay pagos fijos</b>Elegí uno de los botones de arriba o completá los datos y tocá Agregar.</div>'; document.getElementById('fj-info').textContent=''; return; }
+  box.innerHTML = '<table class="ltable"><tr><th>Pago a</th><th>Concepto</th><th>Cuándo</th><th class="mono">Monto</th><th>Estado</th><th></th></tr>' +
+    fijos.map(function(f){
+      return '<tr'+(f.activo===false?' style="opacity:.55;"':'')+'><td>'+escapeHtml(f.entidad)+'</td><td>'+escapeHtml(f.concepto)+'</td><td>'+escapeHtml(fjReglaTexto(f))+'</td><td class="mono">'+money(f.monto)+'</td>' +
+        '<td><a href="#" onclick="fjToggle(\''+f.id+'\');return false;">'+(f.activo===false?'Pausado':'Activo')+'</a></td>' +
+        '<td style="text-align:right;white-space:nowrap;"><button class="btn-ghost btn-small" onclick="fjEdit(\''+f.id+'\')">Editar</button> <button class="btn-ghost btn-small" onclick="fjDel(\''+f.id+'\')">Quitar</button></td></tr>'; }).join('') + '</table>';
+  const hoy = todayISOStr(), n = pagos.filter(function(p){ return p.fijoId && p.estado==='Pendiente' && p.fecha>=hoy; }).length;
+  document.getElementById('fj-info').textContent = n+' pago(s) fijo(s) pendiente(s) ya cargados en la planilla.';
+}
+function fjGenerarClick(){
+  const n = fijosGenerar(fjFinMes(2));
+  renderAll(); fjRender();
+  appAlert(n ? n+' pago(s) fijo(s) cargados en la planilla de pagos hasta fin de '+MESES_ES[+fjFinMes(2).slice(5,7)-1]+'. Ya aparecen en el flujo de caja.' : 'Ya estaban cargados todos los pagos fijos de los próximos 3 meses.');
+}
 /* ---------- importar "Compromisos" (calendario: Banco · Ch nro · Fecha de pago · Orden · Monto) ---------- */
 let cpRows = [];
 function cpNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
@@ -3860,7 +4057,7 @@ function renderFlujoTab(){
       items.map(function(it){
         const movido = it.fechaEfectiva!==it.fecha;
         return '<tr>' +
-          '<td>'+escapeHtml(it.fuenteLabel)+(it.canje?' <span class="badge badge-warn">Canje</span>':'')+'</td>' +
+          '<td>'+escapeHtml(it.fuenteLabel)+(it.canje?' <span class="badge badge-warn">Canje</span>':'')+(it.fijo?' <span class="badge">📌 Fijo</span>':'')+'</td>' +
           '<td>'+escapeHtml(it.entidad)+'</td>' +
           '<td>'+escapeHtml(it.detalle)+'</td>' +
           '<td class="mono">'+(movido ? formatDate(it.fecha)+' →' : '—')+'</td>' +
@@ -4268,7 +4465,7 @@ function calcEval(texto){
 function toggleCalc(){
   const pn = document.getElementById('calc-panel');
   pn.classList.toggle('open');
-  if(pn.classList.contains('open')){ calcLoad(); calcSumRender(); setTimeout(function(){ const e = document.getElementById('calc-expr'); if(e && document.getElementById('calc-c').style.display!=='none') e.focus(); }, 50); }
+  if(pn.classList.contains('open')){ calcLoad(); calcPosLoad(); calcApplyPos(); calcSumRender(); setTimeout(function(){ const e = document.getElementById('calc-expr'); if(e && document.getElementById('calc-c').style.display!=='none') e.focus(); }, 50); }
 }
 function calcTab(t){
   document.getElementById('calc-c').style.display = t==='c' ? 'block' : 'none';
@@ -4367,6 +4564,51 @@ function calcCopySum(){
   const ok = function(){ appAlert('Resumen copiado. Ya podés pegarlo en un mensaje.'); };
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function(){ prompt('Copiá el resumen:', t); }); else prompt('Copiá el resumen:', t);
 }
+/* mover y minimizar la calculadora */
+const CALC_POS_KEY = CALC_KEY.replace('calc-v1','calcpos-v1');
+let calcPos = {x:null, y:null, min:false};
+function calcPosLoad(){ try{ const o = JSON.parse(localStorage.getItem(CALC_POS_KEY)||'null'); if(o && typeof o==='object') calcPos = {x:o.x, y:o.y, min:!!o.min}; }catch(e){} }
+function calcPosSave(){ try{ localStorage.setItem(CALC_POS_KEY, JSON.stringify(calcPos)); }catch(e){} }
+function calcClamp(){
+  const pn = document.getElementById('calc-panel'); if(!pn || !pn.classList.contains('moved')) return;
+  const w = pn.offsetWidth, h = Math.min(pn.offsetHeight, window.innerHeight-20);
+  let x = Math.min(Math.max(0, parseFloat(pn.style.left)||0), Math.max(0, window.innerWidth - w));
+  let y = Math.min(Math.max(0, parseFloat(pn.style.top)||0), Math.max(0, window.innerHeight - 40));
+  pn.style.left = x+'px'; pn.style.top = y+'px';
+}
+function calcApplyPos(){
+  const pn = document.getElementById('calc-panel'); if(!pn) return;
+  pn.classList.toggle('min', !!calcPos.min);
+  const bt = document.getElementById('calc-min-btn'); if(bt){ bt.textContent = calcPos.min ? '▢' : '—'; bt.title = calcPos.min ? 'Agrandar' : 'Minimizar'; }
+  if(typeof calcPos.x==='number' && typeof calcPos.y==='number'){
+    pn.classList.add('moved'); pn.style.left = calcPos.x+'px'; pn.style.top = calcPos.y+'px'; calcClamp();
+  }
+}
+function calcToggleMin(){ calcPos.min = !calcPos.min; calcApplyPos(); calcPosSave(); calcClamp(); if(!calcPos.min){ const e = document.getElementById('calc-expr'); if(e && document.getElementById('calc-c').style.display!=='none') e.focus(); } }
+(function(){
+  let drag = null;
+  document.addEventListener('pointerdown', function(ev){
+    const hd = ev.target.closest && ev.target.closest('#calc-panel .calc-head');
+    if(!hd || ev.target.closest('button')) return;
+    const pn = document.getElementById('calc-panel'), r = pn.getBoundingClientRect();
+    drag = {dx: ev.clientX - r.left, dy: ev.clientY - r.top, id: ev.pointerId};
+    pn.classList.add('moved'); pn.style.left = r.left+'px'; pn.style.top = r.top+'px';
+    hd.classList.add('drag'); try{ hd.setPointerCapture(ev.pointerId); }catch(e){}
+    ev.preventDefault();
+  });
+  document.addEventListener('pointermove', function(ev){
+    if(!drag) return;
+    const pn = document.getElementById('calc-panel');
+    pn.style.left = (ev.clientX - drag.dx)+'px'; pn.style.top = (ev.clientY - drag.dy)+'px'; calcClamp();
+  });
+  function fin(){
+    if(!drag) return; drag = null;
+    const pn = document.getElementById('calc-panel'); const hd = pn.querySelector('.calc-head'); if(hd) hd.classList.remove('drag');
+    calcPos.x = parseFloat(pn.style.left)||0; calcPos.y = parseFloat(pn.style.top)||0; calcPosSave();
+  }
+  document.addEventListener('pointerup', fin); document.addEventListener('pointercancel', fin);
+  window.addEventListener('resize', calcClamp);
+})();
 function calcShowFab(){ const f = document.getElementById('calc-fab'); if(f) f.style.display = 'flex'; }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ const pn = document.getElementById('calc-panel'); if(pn && pn.classList.contains('open')) toggleCalc(); } });
 
@@ -6598,8 +6840,8 @@ function cobCols(){
   c.docnum = -1;
   if(c.documento>=0 && c.documento+1<cobHeaders.length && !String(cobHeaders[c.documento+1]||'').trim() &&
      cobRows.some(function(r){ return String(r[c.documento+1]==null?'':r[c.documento+1]).trim()!==''; })) c.docnum = c.documento+1;
-  c.cuota = -1;
-  cobHeaders.forEach(function(h,i){ if(c.cuota<0 && normHdr(h)==='cuota') c.cuota = i; });
+  c.cuota = -1; c.codigo = -1;
+  cobHeaders.forEach(function(h,i){ const nh = normHdr(h); if(c.cuota<0 && nh==='cuota') c.cuota = i; if(c.codigo<0 && /^(codigo|cod|cod cliente|codigo cliente|cod cli|cliente codigo|nro cliente|n cliente)$/.test(nh)) c.codigo = i; });
   return c;
 }
 function cobDocString(row, cols){
@@ -6646,7 +6888,8 @@ function parseCob(){
     const g = grouped ? (cur || grp('Sin vendedor','')) : grp(cobCell(row,cols.vendedor),'');
     let total = cols.total>=0 ? cleanNumber(cobCell(row,cols.total)) : 0;
     if(!total || total<monto) total = monto;
-    g.items.push({cliente:cliente, vendedor:g.name, documento:documento, emision:emision, vencimiento:venc, monto:total, saldo:monto});
+    const codigo = cols.codigo>=0 ? String(cobCell(row,cols.codigo)).trim().replace(/\.0+$/,'') : '';
+    g.items.push({cliente:cliente, codigo:codigo, vendedor:g.name, documento:documento, emision:emision, vencimiento:venc, monto:total, saldo:monto});
     g.saldo += monto;
   });
   return {groups:groups, omitidas:omitidas, grouped:grouped};
@@ -6853,11 +7096,12 @@ function confirmCobImport(){
       if(it.saldo < saldoAntes) addCobro(ex, saldoAntes - it.saldo);
       ex.vendedor = it.vendedor; ex.vencimiento = it.vencimiento; ex.cliente = it.cliente; if(it.documento) ex.documento = it.documento;
       if(it.emision) ex.emision = it.emision;
+      if(it.codigo) ex.codigo = it.codigo;
       ex.monto = it.monto; ex.cobrado = Math.max(0, it.monto - it.saldo);
       vistas[ex.id] = true;
       actualizadas++;
     }else{
-      const nuevo = {id:uid('cb'), cliente:it.cliente, vendedor:it.vendedor, documento:it.documento, emision:it.emision||'', vencimiento:it.vencimiento, monto:it.monto, cobrado:Math.max(0, it.monto - it.saldo), nota:''};
+      const nuevo = {id:uid('cb'), cliente:it.cliente, codigo:it.codigo||'', vendedor:it.vendedor, documento:it.documento, emision:it.emision||'', vencimiento:it.vencimiento, monto:it.monto, cobrado:Math.max(0, it.monto - it.saldo), nota:''};
       cobranzas.push(nuevo);
       idx.byKey[k] = nuevo;
       if(nuevo.documento){ const d = normKey(nuevo.documento); idx.byDoc[d] = nuevo; idx.cnt[d] = (idx.cnt[d]||0)+1; }
@@ -6959,10 +7203,10 @@ function cobAddSupSheet(wb, supName, filtered){
   const nombre = String(supName||'Cobranzas').replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,31) || 'Cobranzas';
   const ws = wb.addWorksheet(nombre, {views:[{state:'frozen', ySplit:1}]});
   ws.columns = [
-    {header:'Cliente', width:46}, {header:'Documento', width:20}, {header:'Fecha', width:12}, {header:'Vencimiento', width:13},
+    {header:'Cliente', width:46}, {header:'Código', width:10}, {header:'Documento', width:20}, {header:'Fecha', width:12}, {header:'Vencimiento', width:13},
     {header:'Días', width:8}, {header:'Monto', width:17}, {header:'Cobrado', width:17}, {header:'Saldo', width:17}, {header:'$', width:6}, {header:'Observación', width:34}, {header:'Vendedor', width:30}
   ];
-  cobHdrCells(ws.getRow(1), 5, 8);
+  cobHdrCells(ws.getRow(1), 6, 9);
   const NUM = '#,##0.00', DT = 'dd/mm/yyyy';
   const info = {name: ws.name, vend: []};
   let tM=0, tC=0, tS=0;
@@ -6970,39 +7214,40 @@ function cobAddSupSheet(wb, supName, filtered){
     const list = byV[v];
     let sm=0, sc=0, sd=0, vc=0;
     list.forEach(function(c){ const s = cobSaldo(c); sm += c.monto||0; sc += c.cobrado||0; sd += s; if(s>0 && daysUntil(c.vencimiento)<0) vc += s; });
-    const g = ws.addRow([v, supName||'', '', '', '', '', '', '', '', '', '']);
+    const g = ws.addRow([v, '', supName||'', '', '', '', '', '', '', '', '', '']);
     g.font = {name:COB_FONT, size:10, bold:true};
-    g.getCell(2).font = {name:COB_FONT, size:10, bold:false};
+    g.getCell(3).font = {name:COB_FONT, size:10, bold:false};
     const first = g.number + 1, last = g.number + list.length;
-    g.getCell(8).value = {formula:'SUBTOTAL(9,H'+first+':H'+last+')', result: sd};
-    g.getCell(8).font = {name:COB_FONT, size:10, bold:true, color:{argb:COB_RED}};
-    g.getCell(8).numFmt = NUM; g.getCell(8).alignment = {horizontal:'right'};
+    g.getCell(9).value = {formula:'SUBTOTAL(9,I'+first+':I'+last+')', result: sd};
+    g.getCell(9).font = {name:COB_FONT, size:10, bold:true, color:{argb:COB_RED}};
+    g.getCell(9).numFmt = NUM; g.getCell(9).alignment = {horizontal:'right'};
     list.forEach(function(c){
       const s = cobSaldo(c), d = daysUntil(c.vencimiento);
       const ult = (c.cobros||[]).reduce(function(a,x){ return (x.f||'')>a ? x.f : a; }, '');
       const obs = [c.nota||'', ult ? 'Último cobro: '+formatDate(ult) : ''].filter(Boolean).join(' · ');
-      const r = ws.addRow([c.cliente||'', c.documento||'', cobXDate(c.emision), cobXDate(c.vencimiento), (s>0 && d<0) ? -d : 0, c.monto||0, c.cobrado||0, null, 'Gs.', obs, v]);
-      r.getCell(8).value = {formula:'F'+r.number+'-G'+r.number, result: s};
+      const r = ws.addRow([c.cliente||'', c.codigo||'', c.documento||'', cobXDate(c.emision), cobXDate(c.vencimiento), (s>0 && d<0) ? -d : 0, c.monto||0, c.cobrado||0, null, 'Gs.', obs, v]);
+      r.getCell(9).value = {formula:'G'+r.number+'-H'+r.number, result: s};
       r.font = {name:COB_FONT, size:10};
-      r.getCell(3).numFmt = DT; r.getCell(4).numFmt = DT;
-      r.getCell(3).alignment = {horizontal:'left'}; r.getCell(4).alignment = {horizontal:'left'};
-      r.getCell(5).alignment = {horizontal:'right'};
-      [6,7,8].forEach(function(k){ r.getCell(k).numFmt = NUM; });
+      r.getCell(2).alignment = {horizontal:'left'};
+      r.getCell(4).numFmt = DT; r.getCell(5).numFmt = DT;
+      r.getCell(4).alignment = {horizontal:'left'}; r.getCell(5).alignment = {horizontal:'left'};
+      r.getCell(6).alignment = {horizontal:'right'};
+      [7,8,9].forEach(function(k){ r.getCell(k).numFmt = NUM; });
       if(s<=0){ r.eachCell(function(cell){ cell.font = {name:COB_FONT, size:10, color:{argb:'FF7F7F7F'}}; }); }
-      else if(d<0){ r.getCell(5).font = {name:COB_FONT, size:10, color:{argb:COB_RED}, bold:true}; }
+      else if(d<0){ r.getCell(6).font = {name:COB_FONT, size:10, color:{argb:COB_RED}, bold:true}; }
     });
     info.vend.push({v:v, n:list.length, m:sm, cb:sc, sd:sd, vc:vc});
     tM+=sm; tC+=sc; tS+=sd;
   });
   const tr = ws.rowCount + 1;
-  const tot = ws.addRow(['TOTAL '+(supName||''),'','','','','','','','','','']);
+  const tot = ws.addRow(['TOTAL '+(supName||''),'','','','','','','','','','','']);
   tot.font = {name:COB_FONT, size:10, bold:true};
-  tot.getCell(6).value = {formula:'SUBTOTAL(9,F2:F'+(tr-1)+')', result: tM};
-  tot.getCell(7).value = {formula:'SUBTOTAL(9,G2:G'+(tr-1)+')', result: tC};
-  tot.getCell(8).value = {formula:'SUBTOTAL(9,H2:H'+(tr-1)+')', result: tS};
-  [6,7,8].forEach(function(k){ tot.getCell(k).numFmt = NUM; });
+  tot.getCell(7).value = {formula:'SUBTOTAL(9,G2:G'+(tr-1)+')', result: tM};
+  tot.getCell(8).value = {formula:'SUBTOTAL(9,H2:H'+(tr-1)+')', result: tC};
+  tot.getCell(9).value = {formula:'SUBTOTAL(9,I2:I'+(tr-1)+')', result: tS};
+  [7,8,9].forEach(function(k){ tot.getCell(k).numFmt = NUM; });
   tot.eachCell({includeEmpty:true}, function(cell){ cell.border = {top:{style:'thin'}, bottom:{style:'double'}}; });
-  ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:11}};
+  ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:12}};
   ws.pageSetup = {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:'1:1', paperSize:9};
   return info;
 }
@@ -7045,12 +7290,12 @@ function cobBuildWorkbook(groups, est){
     sr.eachCell({includeEmpty:true}, function(cell){ cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFDDEBF7'}}; });
     sh.vend.forEach(function(x){
       const r = wr.addRow(['    '+x.v,'','','','','','']);
-      const n = r.number, sh1 = q(sh.name), K = sh1+'!$K:$K', nm = 'TRIM($A'+n+')';
+      const n = r.number, sh1 = q(sh.name), K = sh1+'!$L:$L', nm = 'TRIM($A'+n+')';
       r.getCell(2).value = {formula:'COUNTIFS('+K+','+nm+')', result:x.n};
-      r.getCell(3).value = {formula:'SUMIFS('+sh1+'!$F:$F,'+K+','+nm+')', result:x.m};
-      r.getCell(4).value = {formula:'SUMIFS('+sh1+'!$G:$G,'+K+','+nm+')', result:x.cb};
-      r.getCell(5).value = {formula:'SUMIFS('+sh1+'!$H:$H,'+K+','+nm+')', result:x.sd};
-      r.getCell(6).value = {formula:'SUMIFS('+sh1+'!$H:$H,'+K+','+nm+','+sh1+'!$E:$E,">0")', result:x.vc};
+      r.getCell(3).value = {formula:'SUMIFS('+sh1+'!$G:$G,'+K+','+nm+')', result:x.m};
+      r.getCell(4).value = {formula:'SUMIFS('+sh1+'!$H:$H,'+K+','+nm+')', result:x.cb};
+      r.getCell(5).value = {formula:'SUMIFS('+sh1+'!$I:$I,'+K+','+nm+')', result:x.sd};
+      r.getCell(6).value = {formula:'SUMIFS('+sh1+'!$I:$I,'+K+','+nm+','+sh1+'!$F:$F,">0")', result:x.vc};
       r.getCell(7).value = {formula:'IF(E'+n+'=0,0,F'+n+'/E'+n+')', result: x.sd>0 ? x.vc/x.sd : 0};
       r.font = {name:COB_FONT, size:10};
       if(x.vc>0) r.getCell(6).font = {name:COB_FONT, size:10, color:{argb:COB_RED}};
@@ -7588,7 +7833,7 @@ const SESSION_KEY = 'dyf-session-v1';
 const GATE_SKIP_KEY = 'dyf-gateskip-v1';
 let appUsers = [], appUsersDel = [], authUser = null, authBoot = true, syncInitDone = false;
 const PERM_SECS = [['flujo','Flujo de caja'],['finanzas','Finanzas'],['cobranzas','Cobranzas'],['inventario','Inventario'],['resumen','Resumen del día']];
-const DATA_SECS = {loans:['flujo','finanzas'], incomes:['flujo','finanzas'], pagos:['flujo','finanzas'], cobranzas:['cobranzas'], cobConfig:['cobranzas'], inventarios:['inventario'], invConfig:['inventario']};
+const DATA_SECS = {loans:['flujo','finanzas'], incomes:['flujo','finanzas'], pagos:['flujo','finanzas'], cobranzas:['cobranzas'], cobConfig:['cobranzas'], inventarios:['inventario'], invConfig:['inventario'], fijos:['flujo','finanzas']};
 
 function isAdmin(){ return appUsers.length===0 || !!(authUser && authUser.admin); }
 function lvl(sec){
@@ -7620,6 +7865,7 @@ function reloadStateFromStorage(){
   cobConfig = normalizeCobConfig(rd(COBCONFIG_KEY, null));
   inventarios = rd(INV_KEY, []); if(!Array.isArray(inventarios)) inventarios = [];
   invConfig = normalizeInvConfig(rd(INVCFG_KEY, null));
+  fijos = rd(FIJOS_KEY, []); if(!Array.isArray(fijos)) fijos = [];
 }
 
 /* ---------- contraseñas ---------- */

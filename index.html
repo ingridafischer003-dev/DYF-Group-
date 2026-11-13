@@ -967,9 +967,18 @@
           <label>Proveedor / beneficiario</label>
           <input type="text" id="p-entidad" placeholder="Ej: Proveedor XYZ" required>
         </div>
+        <div class="field">
+          <label>Banco (opcional)</label>
+          <input type="text" id="p-banco" list="bancos-list" autocomplete="off" placeholder="Elegí o escribí para buscar">
+          <datalist id="bancos-list"><option value="Continental"><option value="Sudameris"><option value="GNB"><option value="Familiar"><option value="Atlas"><option value="BNF"></datalist>
+        </div>
+        <div class="field">
+          <label>N° de cheque (opcional)</label>
+          <input type="text" id="p-numero" inputmode="numeric" autocomplete="off" placeholder="Ej: 26863234">
+        </div>
         <div class="field full">
-          <label>Concepto</label>
-          <input type="text" id="p-concepto" placeholder="Ej: Cheque N° 001-2345, factura, alquiler oficina...">
+          <label>Concepto / detalle (opcional)</label>
+          <input type="text" id="p-concepto" placeholder="Ej: factura, alquiler oficina...">
         </div>
         <div class="field">
           <label>Marca (opcional)</label>
@@ -1015,7 +1024,7 @@
 <div class="overlay" id="canje-overlay">
   <div class="modal" style="max-width:820px;">
     <h3>Cheques en canje</h3>
-    <p class="modal-sub">Cheques que intercambiás con un proveedor (ellos usan los tuyos y vos los de ellos, mismo monto y fecha). Los marcados como canje se ven en el flujo pero <b>no suman</b> al total a pagar del día.</p>
+    <p class="modal-sub">Cheques que intercambiás con un proveedor (ellos usan los tuyos y vos los de ellos, mismo monto y fecha). Los marcados como canje <b>siguen sumando</b> al total a pagar del día (vos pagás el cheque del proveedor), pero quedan identificados para que sepas que esa plata no es disponible: lo que el proveedor te transfiere sirve para cubrir ese cheque.</p>
     <div class="field"><label>Proveedores (separá con coma)</label><input id="canje-q" type="text" value="Schapovaloff, Todo Fresco" oninput="canjeRender()"></div>
     <div id="canje-list" style="max-height:340px;overflow:auto;margin-top:10px;"></div>
     <div id="canje-sum" class="modal-sub" style="margin-top:8px;"></div>
@@ -2794,7 +2803,7 @@ function obligacionesByDay(){
   allObligaciones().forEach(function(it){
     const key = it.fechaEfectiva || it.fecha;
     if(!map[key]) map[key] = {fecha:key, total:0, prestamos:0, cheques:0, chequesGrupo:0, otros:0, canjes:0, items:[]};
-    if(it.canje){ map[key].canjes += it.monto; map[key].items.push(it); return; }
+    if(it.canje) map[key].canjes += it.monto;   // el canje SÍ es salida de caja: se suma al total (solo se lo marca/informa aparte)
     map[key].total += it.monto;
     if(it.fuente==='Prestamo') map[key].prestamos += it.monto;
     else if(it.fuente==='Cheque') map[key].cheques += it.monto;
@@ -4046,7 +4055,7 @@ function renderFlujoTab(){
     '<div class="stat"><div class="stat-label">Cheques a proveedores</div><div class="stat-value">'+money(day?day.cheques:0)+'</div></div>' +
     '<div class="stat"><div class="stat-label">Cheques a empresas del grupo</div><div class="stat-value">'+money(day?day.chequesGrupo:0)+'</div></div>' +
     '<div class="stat"><div class="stat-label">Otros pagos</div><div class="stat-value">'+money(day?day.otros:0)+'</div></div>' +
-    (day && day.canjes>0 ? '<div class="stat"><div class="stat-label">Canjes (neto 0, no suman)</div><div class="stat-value" style="color:var(--amber);">'+money(day.canjes)+'</div><div class="stat-sub">Cheques cruzados con el proveedor</div></div>' : '');
+    (day && day.canjes>0 ? '<div class="stat"><div class="stat-label">De los cuales, en canje</div><div class="stat-value" style="color:var(--amber);">'+money(day.canjes)+'</div><div class="stat-sub">Ya incluidos en el total · lo que transfiere el proveedor cubre este cheque</div></div>' : '');
 
   const dayTable = document.getElementById('flujo-day-table');
   if(!day || day.items.length===0){
@@ -4061,11 +4070,11 @@ function renderFlujoTab(){
           '<td>'+escapeHtml(it.entidad)+'</td>' +
           '<td>'+escapeHtml(it.detalle)+'</td>' +
           '<td class="mono">'+(movido ? formatDate(it.fecha)+' →' : '—')+'</td>' +
-          '<td class="mono"'+(it.canje?' style="opacity:.55;"':'')+'>'+money(it.monto)+'</td>' +
+          '<td class="mono">'+money(it.monto)+'</td>' +
           '<td style="text-align:right;white-space:nowrap;">'+(it.pagoId?'<button class="icon-btn" data-mut title="Editar fecha, monto o datos del cheque" onclick="editPago(\''+it.pagoId+'\')">✎</button> <button class="icon-btn danger" data-mut data-del title="Eliminar" onclick="deletePago(\''+it.pagoId+'\')">✕</button> ':'')+'<button class="icon-btn" title="Marcar pagado" onclick="markObligacionPaid(\''+(it.loanId||'')+'\',\''+(it.cuotaId||'')+'\',\''+(it.pagoId||'')+'\')">✓</button></td>' +
         '</tr>';
       }).join('') +
-      '<tr class="total-row"><td colspan="4">Total del día'+(day.canjes>0?' (sin canjes)':'')+'</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
+      '<tr class="total-row"><td colspan="4">Total del día'+(day.canjes>0?' (incluye canjes)':'')+'</td><td class="mono">'+money(day.total)+'</td><td></td></tr>';
   }
 }
 
@@ -4273,7 +4282,7 @@ function canjeApply(on){
   if(!ids.length){ appAlert('Marcá al menos un cheque.'); return; }
   pagos.forEach(function(p){ if(ids.indexOf(p.id)!==-1){ if(on) p.canje = true; else delete p.canje; } });
   persistPagos(); renderAll(); canjeRender();
-  appAlert(ids.length+' cheque(s) '+(on?'marcados como canje: ya no suman al total a pagar.':'sin canje: vuelven a sumar al total a pagar.'));
+  appAlert(ids.length+' cheque(s) '+(on?'marcados como canje: siguen sumando al total a pagar, pero quedan identificados.':'sin canje.'));
 }
 function openEcExport(){
   if(!needFlag('descargar','descargar reportes')) return;
@@ -4708,12 +4717,35 @@ function reclasificarSospechosos(){
   renderAll();
   appAlert(n+' pago(s) reclasificado(s) como "Cheque a proveedor". Revisá si alguno en realidad era de una empresa del grupo y corregilo desde el lápiz (✎).');
 }
+/* El concepto de un pago se guarda como "Banco: X · Cheque N° Y · detalle" (igual que al importar). */
+function pagoSplitConcepto(c){
+  const out = {banco:'', numero:'', resto:[]};
+  String(c||'').split(/\s*·\s*/).forEach(function(part){
+    let m;
+    if(!part) return;
+    if((m = part.match(/^Banco:\s*(.*)$/i))) out.banco = m[1].trim();
+    else if((m = part.match(/^Cheque\s*N[°ºo]\.?\s*(.+)$/i))) out.numero = m[1].trim();
+    else out.resto.push(part);
+  });
+  out.resto = out.resto.join(' · ');
+  return out;
+}
+function pagoJoinConcepto(banco, numero, resto){
+  const parts = [];
+  if(banco) parts.push('Banco: '+banco);
+  if(numero) parts.push('Cheque N° '+numero);
+  if(resto) parts.push(resto);
+  return parts.join(' · ');
+}
 function openPagoModal(pago){
   document.getElementById('pago-modal-title').textContent = pago ? 'Editar pago' : 'Nuevo pago';
   document.getElementById('p-id').value = pago ? pago.id : '';
   document.getElementById('p-tipo').value = pago ? pago.tipo : 'Cheque';
   document.getElementById('p-entidad').value = pago ? pago.entidad : '';
-  document.getElementById('p-concepto').value = pago ? pago.concepto : '';
+  const pc = pagoSplitConcepto(pago ? pago.concepto : '');
+  document.getElementById('p-banco').value = pc.banco;
+  document.getElementById('p-numero').value = pc.numero;
+  document.getElementById('p-concepto').value = pc.resto;
   document.getElementById('p-marca').value = pago ? (pago.marca||'') : '';
   document.getElementById('p-monto').value = pago ? pago.monto : '';
   document.getElementById('p-fecha').value = pago ? pago.fecha : '';
@@ -4742,14 +4774,14 @@ function savePago(e){
     id: id,
     tipo: document.getElementById('p-tipo').value,
     entidad: entidad,
-    concepto: document.getElementById('p-concepto').value.trim(),
+    concepto: pagoJoinConcepto(document.getElementById('p-banco').value.trim(), document.getElementById('p-numero').value.trim().replace(/\s+/g,''), document.getElementById('p-concepto').value.trim()),
     marca: document.getElementById('p-marca').value.trim(),
     monto: monto,
     fecha: fecha,
     estado: document.getElementById('p-estado').value
   };
   const idx = pagos.findIndex(function(p){ return p.id===id; });
-  if(idx>=0) pagos[idx]=data; else pagos.push(data);
+  if(idx>=0) pagos[idx]=Object.assign({}, pagos[idx], data); else pagos.push(data);   // conserva canje / fijoId al editar
   persistPagos();
   closePagoModal();
   renderAll();

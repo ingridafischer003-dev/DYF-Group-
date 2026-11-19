@@ -583,9 +583,9 @@
         <h2>Cobranzas pendientes por vendedor</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-ghost btn-small danger" data-mut data-del onclick="clearAllCobranzas()">Vaciar todas</button>
-          <button class="btn-primary btn-small" data-mut data-imp onclick="triggerCobImport()">📥 Importar desde Excel</button>
+          <button class="btn-primary btn-small" data-mut data-imp onclick="triggerCobImport()">📥 Importar Excel o PDF</button>
           <button class="btn-primary btn-small" data-exp onclick="openCobExport()">📤 Descargar reporte</button>
-          <input type="file" id="cob-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleCobExcelSelect(event)">
+          <input type="file" id="cob-import-input" accept=".xlsx,.xls,.pdf" style="display:none;" onchange="handleCobExcelSelect(event)">
           <button class="btn-primary" data-mut onclick="openCobModal()">+ Nueva cobranza</button>
         </div>
       </div>
@@ -753,8 +753,9 @@
 <!-- Modal: importar cobranzas desde Excel -->
 <div class="overlay" id="cobimp-overlay">
   <div class="modal wide">
-    <h3>Importar cobranzas desde Excel</h3>
+    <h3>Importar cobranzas desde Excel o PDF</h3>
     <p class="modal-sub">Detectamos las columnas del archivo. Revisá que coincidan antes de importar. Si un documento ya estaba cargado, se actualiza su saldo y vencimiento.</p>
+    <div id="ci-pdf-ctl" class="modal-sub" style="display:none;"></div>
     <div class="field-grid">
       <div class="field"><label>Hoja del Excel</label><select id="ci-sheet" onchange="onCobSheetChange()"></select></div>
       <div class="field"><label>Columna: Cliente</label><select id="ci-col-cliente" onchange="refreshCobPreview()"></select></div>
@@ -2781,13 +2782,17 @@ function allObligaciones(){
       });
     });
   });
+  const hoyEf = nextBusinessDay(todayISOStr());
   pagos.forEach(function(p){
     if(p.estado!=='Pendiente') return;
+    let fEf = nextBusinessDay(p.fecha);
+    // un pago fijo que no se marcó como pagado pasa al día siguiente (hoy) hasta que se pague
+    if(p.fijoId && fEf < hoyEf) fEf = hoyEf;
     items.push({
       fuente:p.tipo, fuenteLabel: pagoTipoLabel(p.tipo),
       entidad:p.entidad, detalle:p.concepto || '—',
       monto:p.monto, capital:p.monto, interes:0,
-      fecha:p.fecha, fechaEfectiva: nextBusinessDay(p.fecha), d:daysUntil(p.fecha),
+      fecha:p.fecha, fechaEfectiva: fEf, d:daysUntil(p.fecha),
       pagoId:p.id, canje:!!p.canje, fijo:!!p.fijoId
     });
   });
@@ -6796,6 +6801,8 @@ function triggerCobImport(){ if(!needFlag('importar','importar archivos')) retur
 function handleCobExcelSelect(e){
   const file = e.target.files[0];
   if(!file) return;
+  if(/\.pdf$/i.test(file.name) || file.type==='application/pdf'){ e.target.value=''; cobImportPdf(file); return; }
+  const ctl0 = document.getElementById('ci-pdf-ctl'); if(ctl0){ ctl0.style.display='none'; ctl0.textContent=''; }
   const reader = new FileReader();
   reader.onload = function(ev){
     try{
@@ -6815,6 +6822,141 @@ function handleCobExcelSelect(e){
   };
   reader.readAsArrayBuffer(file);
   e.target.value = '';
+}
+/* ---- lectura de reportes de cobranzas en PDF (el sistema parte las columnas en dos páginas: 1 = hasta "Días", 2 = Monto / Saldo) ---- */
+function cobPdfNum(s){
+  s = String(s==null?'':s).replace(/[^\d.,\-]/g,'');
+  if(!s || s==='-') return 0;
+  if(s.indexOf(',')>=0) s = s.replace(/\./g,'').replace(',','.');   // 1.234.567,00
+  else s = s.replace(/\./g,'');                                      // 1.234.567
+  const n = parseFloat(s); return isNaN(n) ? 0 : n;
+}
+function cobPdfCluster(items, tol){
+  const sorted = items.slice().sort(function(a,b){ return a.y-b.y; });
+  const rows = [];
+  sorted.forEach(function(it){
+    const last = rows[rows.length-1];
+    if(last && Math.abs(it.y-last.y)<=tol){ last.items.push(it); last.y = (last.y*(last.items.length-1)+it.y)/last.items.length; }
+    else rows.push({y:it.y, items:[it]});
+  });
+  return rows;
+}
+function cobPdfToAoa(pages){
+  const HEAD = ['Cliente','Código','R.U.C. / CI','Teléfono','Celular','Documento','','Cuota','Fecha','Cond. Venta','Vencimiento','Días','Monto','Saldo'];
+  const info = {paginas:pages.length, filas:0, grupos:0, sinPar:0, monedas:{}, descuadres:[]};
+  // 1) clasificar páginas y armar pares (izquierda = datos, derecha = montos)
+  const hasTxt = function(p,t){ return p.some(function(i){ return i.s===t; }); };
+  const left = [], right = [];
+  const pairs = [];
+  let pend = null;
+  pages.forEach(function(p){
+    const isL = hasTxt(p,'Cliente') && hasTxt(p,'Vencimiento');
+    const isR = hasTxt(p,'Monto') && hasTxt(p,'Saldo') && !isL;
+    if(isL){ if(pend){ pairs.push({l:pend, r:null}); } pend = p; }
+    else if(isR){ if(pend){ pairs.push({l:pend, r:p}); pend = null; } else info.sinPar++; }
+  });
+  if(pend) pairs.push({l:pend, r:null});
+  if(!pairs.length) return {aoa:null, info:info};
+  const aoa = [HEAD];
+  const YMIN = 36, YMAX = 560;
+  pairs.forEach(function(pr){
+    const hdrX = {};
+    pr.l.forEach(function(i){ if(i.y<YMIN) hdrX[i.s] = i.x; });
+    const xs = [hdrX['Cliente'], hdrX['Código'], hdrX['R.U.C. / CI'], hdrX['Teléfono'], hdrX['Celular'], hdrX['Documento'], hdrX['Cuota'], hdrX['Fecha'], hdrX['Cond. Venta'], hdrX['Vencimiento'], hdrX['Días']];
+    if(xs.some(function(x){ return x==null; })) return;
+    function colOf(x){ let c = 0; for(let k=1;k<xs.length;k++){ if(x >= xs[k]-9) c = k; } return c; }
+    const rowsL = cobPdfCluster(pr.l.filter(function(i){ return i.y>=YMIN && i.y<YMAX; }), 3);
+    let rowsR = [];
+    let xMonto = null, xSaldoCut = null, xMon = null;
+    if(pr.r){
+      const hm = pr.r.find(function(i){ return i.s==='Monto' && i.y<YMIN; }), hs = pr.r.find(function(i){ return i.s==='Saldo' && i.y<YMIN; }), hd = pr.r.find(function(i){ return i.s==='$' && i.y<YMIN; });
+      if(hm && hs){ xSaldoCut = (hm.x+hs.x)/2; xMon = hd ? hd.x-8 : hs.x+20; }
+      rowsR = cobPdfCluster(pr.r.filter(function(i){ return i.y>=YMIN && i.y<YMAX; }), 3);
+    }
+    rowsL.forEach(function(row){
+      const cells = []; for(let k=0;k<11;k++) cells.push([]);
+      row.items.sort(function(a,b){ return a.x-b.x; }).forEach(function(i){ cells[colOf(i.x)].push(i.s); });
+      const txt = cells.map(function(a){ return a.join(' ').trim(); });
+      // nombre pegado al código ("...LIMITADA7.008")
+      if(!txt[1]){ const m = txt[0].match(/^(.*?[^\d.\s])(\d{1,2}\.\d{3})$/); if(m){ txt[0] = m[1].trim(); txt[1] = m[2]; } }
+      // montos de la página derecha con el mismo alto
+      let monto = '', saldo = '', mon = '';
+      if(xSaldoCut!=null){
+        let best = null, bd = 1e9;
+        rowsR.forEach(function(rr){ const d = Math.abs(rr.y-row.y); if(d<bd){ bd = d; best = rr; } });
+        if(best && bd<=3.5){
+          best.items.forEach(function(i){
+            if(i.x>=xMon) mon = (mon+' '+i.s).trim();
+            else if(i.x>=xSaldoCut) saldo = (saldo+' '+i.s).trim();
+            else monto = (monto+' '+i.s).trim();
+          });
+          best.used = true;
+        }
+      }
+      let docTipo = txt[5], docNum = '';
+      const mDoc = docTipo.match(/^(.*?)\s*(\d{3}\.\d{3}\.\d{3})$/);
+      if(mDoc){ docTipo = mDoc[1].trim(); docNum = mDoc[2]; }
+      if(/^total/i.test(txt[8]) || /^total/i.test(txt[0])){ info.totalPdf = cobPdfNum(saldo)||cobPdfNum(monto); return; }   // "Total general a cobrar" (sirve de control)
+      const esDetalle = !!(txt[5] || txt[7] || txt[9]);
+      if(!txt[0] && !esDetalle) return;
+      info.filas++;
+      if(esDetalle){
+        mon = mon.replace(/\s+/g,' ');
+        info.monedas[mon||'(vacía)'] = (info.monedas[mon||'(vacía)']||0)+1;
+        aoa.push([txt[0], txt[1].replace(/\D/g,''), txt[2], txt[3], txt[4], docTipo, docNum, txt[6], txt[7], txt[8], txt[9], parseInt(txt[10],10)||'', cobPdfNum(monto)||'', cobPdfNum(saldo)||'']);
+      }else{
+        info.grupos++;
+        // fila de vendedor: nombre, código, supervisor (texto en R.U.C.), código del supervisor, total de saldo
+        aoa.push([txt[0], parseInt(txt[1].replace(/\D/g,''),10)||'', txt[2], parseInt(txt[4].replace(/\D/g,''),10)||'', '', '', '', '', '', '', '', '', cobPdfNum(saldo)||cobPdfNum(monto)||'', '']);
+      }
+    });
+    rowsR.forEach(function(rr){ if(!rr.used) info.sinPar++; });
+  });
+  let suma = 0; aoa.forEach(function(r,i){ if(i>0 && r[5]!=='' && typeof r[13]==='number') suma += r[13]; });
+  info.suma = suma;
+  info.cuadra = (info.totalPdf==null) ? null : Math.abs(info.totalPdf-suma) < 1;
+  return {aoa:aoa, info:info};
+}
+async function cobPdfRead(file){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const pages = [];
+  for(let n=1;n<=pdf.numPages;n++){
+    const pg = await pdf.getPage(n), vp = pg.getViewport({scale:1}), tc = await pg.getTextContent();
+    const its = [];
+    tc.items.forEach(function(i){ const s = String(i.str==null?'':i.str).trim(); if(s) its.push({s:s, x:i.transform[4], y:vp.height-i.transform[5]}); });
+    pages.push(its);
+  }
+  return cobPdfToAoa(pages);
+}
+
+async function cobImportPdf(file){
+  if(typeof pdfjsLib==='undefined' || typeof XLSX==='undefined'){ appAlert('No se pudo cargar el lector de PDF (revisá tu conexión a internet e intentá de nuevo).'); return; }
+  try{
+    const r = await cobPdfRead(file);
+    if(!r.aoa || r.aoa.length<2){ appAlert('No encontré el reporte de cobranzas en este PDF. Tiene que ser el reporte con las columnas Cliente, Documento, Vencimiento, Monto y Saldo. Si es de otro formato, descargalo en Excel.'); return; }
+    const ws = XLSX.utils.aoa_to_sheet(r.aoa);
+    cobWorkbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(cobWorkbook, ws, 'Reporte PDF');
+    cobSel = {}; cobSupSel = {}; cobCliIgn = {};
+    document.getElementById('ci-hasta').value = '';
+    document.getElementById('ci-cerrar').value = cobConfig.cobModo || 'quitar';
+    document.getElementById('ci-sheet').innerHTML = '<option value="Reporte PDF">Reporte PDF</option>';
+    onCobSheetChange();
+    const ctl = document.getElementById('ci-pdf-ctl'), i = r.info;
+    const nFact = r.aoa.filter(function(x,k){ return k>0 && x[5]!==''; }).length;
+    let msg = '📄 PDF leído: '+nFact+' facturas · '+(i.paginas/2)+' hojas de reporte.';
+    let ok = true;
+    if(i.cuadra===true) msg += ' ✔ Control: la suma de saldos ('+money(i.suma)+') coincide con el "Total general" del reporte.';
+    else if(i.cuadra===false){ ok = false; msg += ' ⚠ Control: la suma de saldos leída ('+money(i.suma)+') NO coincide con el "Total general" del PDF ('+money(i.totalPdf)+'). Revisá antes de importar o usá el Excel.'; }
+    else msg += ' (el PDF no trae "Total general" para controlar).';
+    if(i.sinPar>0){ ok = false; msg += ' ⚠ Hay páginas de montos sin su par de datos ('+i.sinPar+').'; }
+    ctl.textContent = msg; ctl.style.color = ok ? 'var(--green, #3a9d5d)' : 'var(--amber, #d98e04)'; ctl.style.display = 'block';
+    document.getElementById('cobimp-overlay').classList.add('open');
+  }catch(err){
+    console.error(err);
+    appAlert('No se pudo leer el PDF. Probá descargarlo de nuevo o importá el Excel.');
+  }
 }
 function cobCell(row,i){ return (i>=0 && row[i]!=null) ? row[i] : ''; }
 function cobIsGroupRow(row, cols){

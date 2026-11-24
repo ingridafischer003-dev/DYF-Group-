@@ -382,6 +382,8 @@
     <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)">
     <button class="btn-primary btn-small" onclick="triggerSmartImport()">📥 Importar cheques (MIDA: Excel o PDF)</button>
     <button class="btn-primary btn-small" data-mut data-imp onclick="triggerPlanImport()">🧾 Importar plan de cheques (estado de cuenta)</button>
+    <button class="btn-primary btn-small" data-mut data-imp onclick="triggerOlgaImport()">📄 Importar planes de pago de Olga (PDF)</button>
+    <input type="file" id="olga-import-input" accept=".pdf" multiple style="display:none;" onchange="handleOlgaFiles(event)">
     <button class="btn-primary btn-small" data-mut onclick="openFijos()">📌 Pagos fijos</button>
     <button class="btn-primary btn-small" data-mut onclick="openCanje()">🔁 Marcar cheques en canje</button>
     <button class="btn-primary btn-small" data-exp onclick="openEcExport()">📤 Descargar estado de cuenta por marca</button>
@@ -2294,6 +2296,114 @@ function parseMidaChequeReport(aoa){
   }
   return results;
 }
+/* ---------- planes de pago de Olga (PDF "Plan de pago - DyF" que genera la otra app) → planilla de pagos ---------- */
+const OLGA_ENTIDAD = 'Olga';
+async function opPdfLines(file){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const pages = [];
+  for(let n=1;n<=pdf.numPages;n++){
+    const pg = await pdf.getPage(n), vp = pg.getViewport({scale:1}), tc = await pg.getTextContent();
+    pages.push(tc.items.filter(function(i){ return String(i.str).trim(); }).map(function(i){ return {s:String(i.str).trim(), x:i.transform[4], y:vp.height-i.transform[5]}; }));
+  }
+  return opLinesFromPages(pages);
+}
+function opLinesFromPages(pages){
+  const out = [];
+  pages.forEach(function(its){
+    its.sort(function(a,b){ return a.y-b.y; });
+    const rows = [];
+    its.forEach(function(it){ const r = rows[rows.length-1]; if(r && Math.abs(it.y-r.y)<=3) r.items.push(it); else rows.push({y:it.y, items:[it]}); });
+    rows.forEach(function(r){ out.push(r.items.sort(function(a,b){ return a.x-b.x; }).map(function(i){ return i.s; }).join(' ').replace(/\s+/g,' ').trim()); });
+  });
+  return out;
+}
+function opGs(s){ return parseInt(String(s).replace(/\./g,''),10)||0; }
+function opParse(lines, fileName){
+  const txt = lines.join('\n');
+  if(!/Plan de pago/i.test(txt) || !/Cuotas/i.test(txt)) return null;
+  const plan = {docs:[], cuotas:[], fechaPlan:'', capital:0, interes:0, total:0, label:'', banks:[]};
+  let m = txt.match(/Fecha:\s*(\d{2})\/(\d{2})\/(\d{4})/); if(m) plan.fechaPlan = m[3]+'-'+m[2]+'-'+m[1];
+  lines.forEach(function(t){
+    let d = t.match(/^(Cheque|Transferencia|Pagar[eé]|Dep[oó]sito|Giro)\s*N[º°o]\.?\s*(\S+)\s+(.+?)\s+(\d{2})\/(\d{2})\/(\d{4})\s+Gs\.\s*([\d.]+)/i);
+    if(d){ plan.docs.push({tipo:d[1], nro:d[2], banco:d[3].trim(), fecha:d[6]+'-'+d[5]+'-'+d[4], monto:opGs(d[7])}); return; }
+    let c = t.match(/^(\d{1,3})\s+(\d{2})\/(\d{2})\/(\d{4})\s+Gs\.\s*([\d.]+)\s+Gs\.\s*([\d.]+)\s+Gs\.\s*([\d.]+)$/);
+    if(c){ plan.cuotas.push({n:parseInt(c[1],10), fecha:c[4]+'-'+c[3]+'-'+c[2], interes:opGs(c[5]), monto:opGs(c[6]), saldo:opGs(c[7])}); return; }
+    let k;
+    if((k = t.match(/^Capital pendiente:\s*Gs\.\s*([\d.]+)/i))) plan.capital = opGs(k[1]);
+    else if((k = t.match(/^Intereses.*?:\s*Gs\.\s*([\d.]+)/i))) plan.interes = opGs(k[1]);
+    else if((k = t.match(/^Total a pagar:\s*Gs\.\s*([\d.]+)/i))) plan.total = opGs(k[1]);
+  });
+  if(!plan.cuotas.length) return null;
+  // nombre del plan: lo que viene después de la fecha en el nombre del archivo ("..._2026-11-24_CASTOR.pdf"); si no hay, el banco de los documentos
+  const fm = String(fileName||'').replace(/^[0-9a-f]{8}-/i,'').match(/Plan[_ ]de[_ ]pago[_ ]DyF[_ ]\d{4}-\d{2}-\d{2}[_ ]*(.*?)(?:\.pdf)?$/i);
+  plan.label = fm ? fm[1].replace(/_/g,' ').replace(/\s*\(\d+\)\s*$/,'').trim() : '';
+  if(!plan.label){
+    const b = plan.docs.length ? plan.docs[0].banco : '';
+    plan.label = b.replace(/^banco\s+/i,'').replace(/\s+(paraguay\s+)?s\.?a\.?(e\.?c\.?a\.?)?\.?$/i,'').trim() || 'Plan';
+  }
+  plan.keys = plan.docs.map(function(d){ return (d.tipo+'|'+d.nro).toLowerCase(); });
+  const suma = plan.cuotas.reduce(function(a,c){ return a+c.monto; }, 0);
+  plan.cuadra = plan.total ? (suma===plan.total) : null;
+  plan.suma = suma;
+  return plan;
+}
+function triggerOlgaImport(){
+  if(!needFlag('importar','importar archivos')) return;
+  if(typeof pdfjsLib==='undefined'){ appAlert('No se pudo cargar el lector de PDF (revisá tu conexión a internet e intentá de nuevo).'); return; }
+  document.getElementById('olga-import-input').click();
+}
+let olgaPending = null;
+async function handleOlgaFiles(e){
+  const files = Array.prototype.slice.call(e.target.files||[]); e.target.value = '';
+  if(!files.length) return;
+  const plans = [], bad = [];
+  for(let i=0;i<files.length;i++){
+    try{
+      const pl = opParse(await opPdfLines(files[i]), files[i].name);
+      if(pl) plans.push(pl); else bad.push(files[i].name);
+    }catch(err){ console.error(err); bad.push(files[i].name); }
+  }
+  if(!plans.length){ appAlert('No encontré planes de pago en '+(files.length>1?'esos archivos':'ese archivo')+'. Tiene que ser el PDF "Plan de pago - DyF" que genera la otra app.'); return; }
+  // cuotas ya cargadas de un plan anterior (mismos cheques/transferencias): las pendientes se reemplazan, las pagadas se respetan
+  let nuevas = 0, reemplaza = 0, pagadas = 0;
+  plans.forEach(function(pl){
+    const prev = pagos.filter(function(p){ return p.plan && p.plan.docs && p.plan.docs.some(function(k){ return pl.keys.indexOf(k)>=0; }); });
+    pl.prevPend = prev.filter(function(p){ return p.estado==='Pendiente'; }).map(function(p){ return p.id; });
+    pl.prevPagN = prev.filter(function(p){ return p.estado==='Pagada'; }).map(function(p){ return p.plan.n; });
+    reemplaza += pl.prevPend.length; pagadas += pl.prevPagN.length;
+    pl.nuevas = pl.cuotas.filter(function(c){ return pl.prevPagN.indexOf(c.n)<0; });
+    nuevas += pl.nuevas.length;
+  });
+  olgaPending = plans;
+  let msg = 'Se van a agregar a la planilla de pagos (entidad "'+OLGA_ENTIDAD+'"):\n';
+  plans.forEach(function(pl){
+    msg += '\n· '+pl.label+': '+pl.nuevas.length+' cuotas de '+pl.cuotas.length+' · '+fmtDMY(pl.cuotas[0].fecha)+' a '+fmtDMY(pl.cuotas[pl.cuotas.length-1].fecha)+' · '+money(pl.suma)+' en total'+(pl.cuadra===false?' ⚠ la suma no coincide con el total del PDF ('+money(pl.total)+')':'');
+  });
+  if(reemplaza>0) msg += '\n\nYa había '+reemplaza+' cuota(s) pendiente(s) de estos mismos documentos: se reemplazan por las nuevas (no se duplican).';
+  if(pagadas>0) msg += '\nLas '+pagadas+' cuota(s) ya marcadas como pagadas no se tocan.';
+  if(bad.length) msg += '\n\nNo se pudieron leer: '+bad.join(', ');
+  msg += '\n\n¿Agregar?';
+  appConfirm(msg, olgaApply);
+}
+function fmtDMY(iso){ const p = String(iso||'').split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
+function olgaApply(){
+  const plans = olgaPending; olgaPending = null; if(!plans) return;
+  let add = 0, rem = 0;
+  plans.forEach(function(pl){
+    if(pl.prevPend.length){ rem += pl.prevPend.length; pagos = pagos.filter(function(p){ return pl.prevPend.indexOf(p.id)<0; }); }
+    pl.nuevas.forEach(function(c){
+      pagos.push({id:uid('p'), tipo:'Otro', entidad:OLGA_ENTIDAD,
+        concepto:'Plan '+OLGA_ENTIDAD+' · '+pl.label+' · cuota '+c.n+'/'+pl.cuotas.length+' · interés '+money(c.interes),
+        monto:c.monto, fecha:c.fecha, estado:'Pendiente', marca:'',
+        plan:{docs:pl.keys, n:c.n, de:pl.cuotas.length, label:pl.label}});
+      add++;
+    });
+  });
+  persistPagos(); renderAll();
+  appAlert('Listo: '+add+' cuota(s) del plan de '+OLGA_ENTIDAD+' agregadas a la planilla de pagos'+(rem?' ('+rem+' pendientes anteriores reemplazadas)':'')+'.');
+}
+
 function triggerSmartImport(){
   if(typeof XLSX==='undefined'){
     appAlert('No se pudo cargar el lector de Excel (revisá tu conexión a internet e intentá de nuevo).');

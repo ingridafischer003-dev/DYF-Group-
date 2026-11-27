@@ -464,6 +464,17 @@
       </div>
       <div class="ledger" style="margin-bottom:24px;"><table class="ltable" id="flujo-week-table"></table></div>
 
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span>Necesidad del mes — sin préstamos</span>
+        <span style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-ghost btn-small" onclick="shiftFlujoMonth(-1)">‹ Mes anterior</button>
+          <span class="pill" id="flujo-month-label" style="min-width:140px;text-align:center;"></span>
+          <button class="btn-ghost btn-small" onclick="shiftFlujoMonth(1)">Mes siguiente ›</button>
+          <button class="btn-ghost btn-small" onclick="copyFlujoMonth()">Copiar resumen</button>
+        </span>
+      </div>
+      <div class="ledger" style="margin-bottom:24px;"><table class="ltable" id="flujo-month-table"></table></div>
+
       <div class="section-title">Cheques no pagados (vencidos)</div>
       <p class="modal-sub" style="margin-top:-4px;">Cheques a proveedores y a empresas del grupo cuya fecha de pago ya pasó y siguen sin marcarse como pagados — por ejemplo, un cheque que no entró en el día y sigue pendiente. Se actualiza solo cada día hasta que lo marqués como pagado.</p>
       <div class="ledger" style="margin-bottom:24px;"><table class="ltable" id="flujo-vencidos-table"></table></div>
@@ -4140,6 +4151,51 @@ function renderFlujoWeek(){
     }).join('') +
     '<tr class="total-row"><td colspan="2">Total de la semana</td><td class="mono">'+money(w.total)+'</td></tr>';
 }
+/* ---------- necesidad del mes (sin préstamos) ---------- */
+function flujoMonthData(){
+  const sel = new Date(flujoSelectedDate+'T00:00:00');
+  const y = sel.getFullYear(), m = sel.getMonth();
+  const lastDay = new Date(y, m+1, 0).getDate();
+  const iso = function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  const byDay = {}; obligacionesByDay().forEach(function(d){ byDay[d.fecha]=d; });
+  const weeks = []; let cur = null, total = 0;
+  for(let n=1;n<=lastDay;n++){
+    const d = new Date(y, m, n);
+    const dd = byDay[iso(d)];
+    const monto = dd ? dd.cheques+dd.chequesGrupo+dd.otros : 0;
+    if(!cur || (d.getDay()===1)){ cur = {desde:iso(d), hasta:iso(d), monto:0}; weeks.push(cur); }
+    cur.hasta = iso(d); cur.monto += monto; total += monto;
+  }
+  return {weeks:weeks, total:total, y:y, m:m, first:iso(new Date(y,m,1))};
+}
+const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function shiftFlujoMonth(delta){
+  const d = new Date(flujoSelectedDate+'T00:00:00');
+  const n = new Date(d.getFullYear(), d.getMonth()+delta, 1);
+  setFlujoDate(n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-01');
+}
+function renderFlujoMonth(){
+  const w = flujoMonthData();
+  document.getElementById('flujo-month-label').textContent = MESES_ES[w.m]+' '+w.y;
+  document.getElementById('flujo-month-table').innerHTML =
+    '<tr><th>Semana</th><th class="mono">Período</th><th class="mono">Total a pagar</th></tr>' +
+    w.weeks.map(function(r,i){
+      return '<tr style="cursor:pointer;" onclick="setFlujoDate(\''+r.desde+'\')">' +
+        '<td>Semana '+(i+1)+'</td>' +
+        '<td class="mono">'+formatDate(r.desde).slice(0,5)+' al '+formatDate(r.hasta).slice(0,5)+'</td>' +
+        '<td class="mono">'+(r.monto?money(r.monto):'—')+'</td></tr>';
+    }).join('') +
+    '<tr class="total-row"><td colspan="2">Necesidad del mes ('+MESES_ES[w.m]+')</td><td class="mono">'+money(w.total)+'</td></tr>';
+}
+function copyFlujoMonth(){
+  const w = flujoMonthData();
+  const t = 'Necesidad de '+MESES_ES[w.m]+' '+w.y+' (sin préstamos)\n' +
+    w.weeks.map(function(r,i){ return 'Semana '+(i+1)+' ('+formatDate(r.desde).slice(0,5)+' al '+formatDate(r.hasta).slice(0,5)+'): '+money(r.monto); }).join('\n') +
+    '\nTOTAL MES: '+money(w.total);
+  const done = function(){ alert('Resumen copiado. Ya podés pegarlo en WhatsApp o en un correo.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(done, function(){ prompt('Copiá el resumen:', t); }); }
+  else prompt('Copiá el resumen:', t);
+}
 function copyFlujoWeek(){
   const w = flujoWeekData();
   const t = 'Pagos de la semana '+formatDate(w.desde)+' al '+formatDate(w.hasta)+' (sin préstamos)\n' +
@@ -4157,6 +4213,7 @@ function renderFlujoTab(){
   renderVencidosNoPagados();
   renderCalendar(dayTotalsMap);
   renderFlujoWeek();
+  renderFlujoMonth();
   ckSearch();
 
   const selected = flujoSelectedDate;
@@ -6218,7 +6275,6 @@ const SECTIONS = {
   resumen:   {icon:'📋', title:'Resumen del día', desc:'Lo más importante de hoy en una sola pantalla.', tabs:['resumen']}
 };
 let currentSection = 'home';
-const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 function setHeader(eyebrow, title, sub){
   document.getElementById('hdr-eyebrow').textContent = eyebrow;
